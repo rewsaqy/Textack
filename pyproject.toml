@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "textack"
 version = "1.0.00"
@@ -5,6 +9,12 @@ description = "typing = damage — siege the fortress"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.9"
+dependencies = [
+    "windows-curses>=2.3; sys_platform == 'win32'",
+]
+
+[project.scripts]
+textack = "textack.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]

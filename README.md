@@ -13,9 +13,43 @@ Sekaligus game edukasi: melatih kecepatan mengetik + hafal perintah Linux.
 
 ```bash
 python3 main.py
+# atau
+python3 -m textack
 ```
 
 Butuh hanya Python 3 standar, tanpa install tambahan. Jalan native di Linux terminal.
+
+### Install biar tinggal ketik `textack` (Linux)
+
+```bash
+uv tool install -e .
+# lalu dari mana aja:
+textack
+```
+
+Alternatif klasik:
+
+```bash
+pip install -e .
+textack
+```
+
+### Windows — bisa, dengan 1 tambahan
+
+Game ini pakai `curses`. Di Linux/macOS sudah bawaan Python.
+Di Windows butuh `windows-curses` (otomatis ke-install via pip):
+
+```powershell
+pip install -e .
+textack
+# atau: pip install -e .[windows]  (sama aja, eksplisit)
+```
+
+Catatan Windows:
+- Jalankan di Windows Terminal / PowerShell / CMD (bukan IDE output panel).
+- Suara `.wav` diputar via PowerShell `System.Media.SoundPlayer`, kalau tidak ada file = diam (tidak crash).
+- Save data di `%LOCALAPPDATA%\textack\best.txt`, config waifu di `%APPDATA%\textack\waifu.txt`.
+- Di Linux tetap: `~/.cache/textack/best.txt` dan `~/.config/textack/waifu.txt`.
 
 ## Dev
 

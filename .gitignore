@@ -3,3 +3,6 @@ worktrees/
 .superpowers/
 __pycache__/
 .pytest_cache/
+.venv/
+*.egg-info/
+uv.lock
