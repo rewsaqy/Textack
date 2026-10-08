@@ -1,12 +1,18 @@
 # textack/ui/screens/opening.py
 """Opening screen — verbatim move from main.py:365-500 show_opening."""
 import curses
+import os
 import random
+import sys
 import time
 
 from textack import VERSION
+from textack.core import story
 from textack.core.progression import rank_for
+from textack.infra import storage as storage_mod
+from textack.infra import waifu as waifu_mod
 from textack.infra.storage import load_best
+from textack.ui import gfx, guard
 from textack.ui.widgets import safe_add
 
 LOGO_SMALL = [
@@ -21,6 +27,25 @@ def show(stdscr, P):
     h, w = stdscr.getmaxyx()
     cx = w // 2
     best = load_best()
+    wstate = storage_mod.load_waifu()
+    unlocked = [u for u in story.WAIFU_ORDER if u in (wstate.get("unlocked") or ["aika"])] or ["aika"]
+    try:
+        sel_w = unlocked.index(story.resolve_active(None, None, wstate))
+    except ValueError:
+        sel_w = 0
+    gfx_mode = gfx.resolve(sys.argv[1:], os.environ)
+    portrait_sent_for = None
+
+    def _send_portrait(wid):
+        pp = waifu_mod.find_photo(wid)
+        if not pp:
+            return False
+        data = gfx.png_bytes_for(pp)
+        if not data:
+            return False
+        for seq in gfx.build_transmit(data, 20):
+            gfx.emit(seq)
+        return True
     t0 = time.monotonic()
     boot_dur = 2.2
     logs = [
@@ -49,6 +74,13 @@ def show(stdscr, P):
         last = now
         h, w = stdscr.getmaxyx()
         cx = w // 2
+        if guard.too_small(h, w):
+            if guard.wait_until_fit(stdscr, P) == "quit":
+                return "quit"
+            stdscr.nodelay(True)
+            stdscr.timeout(33)
+            last = time.monotonic()
+            continue
         t = now - t0
 
         # input
@@ -63,6 +95,11 @@ def show(stdscr, P):
                     sel = (sel - 1) % len(menu)
                 elif key in (curses.KEY_DOWN, ord("j")):
                     sel = (sel + 1) % len(menu)
+                elif key in (curses.KEY_LEFT, curses.KEY_RIGHT):
+                    d = -1 if key == curses.KEY_LEFT else 1
+                    sel_w = (sel_w + d) % len(unlocked)
+                    wstate["active"] = unlocked[sel_w]
+                    storage_mod.save_waifu(storage_mod.DEFAULT_WAIFU, wstate)
                 elif key in (10, 13):  # enter
                     return ["play", "howto", "quit"][sel]
                 elif key in (ord("h"), ord("H")):
@@ -81,6 +118,7 @@ def show(stdscr, P):
                 s["x"] += w
                 s["y"] = random.random() * h
         sel_y += (sel - sel_y) * min(1, dt * 12)
+        _pgeom = None
 
         stdscr.erase()
         # top bar ala agent
@@ -145,6 +183,17 @@ def show(stdscr, P):
                     safe_add(stdscr, y, x, "  " + item.replace("▶  ", ""), P["dim"] if i != sel else P["fg"])
             # selector panah halus (interpolasi posisi)
             safe_add(stdscr, int(my + sel_y * 2), cx - 19, "▶", P["green"])
+            # operator picker (phase 2: side-quest + chat plug here)
+            _wid = unlocked[sel_w]
+            _w = story.get_waifu(_wid)
+            _bond = float((wstate.get("bond") or {}).get(_wid, 0.0))
+            _op = f"Operator: {_w['name']} · {_w['title']} ♡{story.level_for(_bond)}  ({sel_w + 1}/{len(unlocked)} ◄ ►)"
+            safe_add(stdscr, my + 7, cx - len(_op) // 2, _op, P["yellow"])
+            _pgeom = None
+            if gfx_mode == "kitty" and w >= 110 and _wid != portrait_sent_for:
+                portrait_sent_for = _wid if _send_portrait(_wid) else None
+            if gfx_mode == "kitty" and w >= 110 and portrait_sent_for:
+                _pgeom = (ly + 1, cx + 22, 22, 11)
             # footer adiktif
             pulse_on = (now * 2.2) % 1 < 0.65
             hint = "ENTER mulai  •  ↑↓ pilih  •  combo = crit" if pulse_on else "1 kata lagi…  combo sayang berhenti"
@@ -152,3 +201,9 @@ def show(stdscr, P):
             safe_add(stdscr, h - 2, 2, "GPL-3.0 • stdlib only • :q keluar kapan saja", P["dim"])
 
         stdscr.refresh()
+        if _pgeom and portrait_sent_for:
+            _py, _pxx, _pc, _pr = _pgeom
+            gfx.place_at(_py, _pxx, gfx.build_place(20, 2, _pc, _pr))
+        elif portrait_sent_for:
+            gfx.emit(gfx.build_delete_image(20))
+            portrait_sent_for = None

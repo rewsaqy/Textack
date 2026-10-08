@@ -12,6 +12,9 @@ def _cache_dir():
 
 
 DEFAULT_BEST = _cache_dir() / "best.txt"
+DEFAULT_WAIFU = _cache_dir() / "waifu.json"
+
+WAIFU_DEFAULT_STATE = {"active": "aika", "unlocked": ["aika"], "bond": {"aika": 0.0}}
 
 
 def load_best(path=DEFAULT_BEST):
@@ -28,5 +31,36 @@ def save_best(path, wave, wpm):
         cur = load_best(path)
         if wave > cur["wave"] or (wave == cur["wave"] and wpm > cur["wpm"]):
             path.write_text(f"{wave} {wpm:.1f}\n")
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+
+def load_waifu(path=DEFAULT_WAIFU):
+    import copy
+    import json
+    state = copy.deepcopy(WAIFU_DEFAULT_STATE)
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(raw.get("active"), str):
+            state["active"] = raw["active"]
+        if isinstance(raw.get("unlocked"), list):
+            state["unlocked"] = [u for u in raw["unlocked"] if isinstance(u, str)] or ["aika"]
+        if isinstance(raw.get("bond"), dict):
+            for k, v in raw["bond"].items():
+                try:
+                    state["bond"][k] = max(0.0, float(v))
+                except (TypeError, ValueError):
+                    continue
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return state
+
+
+def save_waifu(path, state):
+    import json
+    try:
+        path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+        safe = {"active": state.get("active", "aika"), "unlocked": list(state.get("unlocked", ["aika"])), "bond": {k: max(0.0, float(v)) for k, v in dict(state.get("bond", {})).items()}}
+        path.write_text(json.dumps(safe, indent=1) + "\n", encoding="utf-8")
     except Exception:  # noqa: BLE001, S110
         pass

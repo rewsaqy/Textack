@@ -16,10 +16,11 @@ import sys
 import time
 
 from textack import VERSION
-from textack.core import combat, enemies, progression, upgrades, words
+from textack.core import combat, enemies, progression, story, upgrades, words
 from textack.infra import quality, storage, waifu
 from textack.infra import sfx as sfx_mod
-from textack.ui import widgets
+from textack.ui import face as face_mod
+from textack.ui import gfx, guard, widgets
 from textack.ui.screens import upgrade as upgrade_screen
 from textack.ui.widgets import get_field
 
@@ -84,10 +85,42 @@ def show(stdscr, P):
     last_flash_on = False
     # suara + waifu operator
     sfx = sfx_mod.init()
-    waifu_art = waifu.load_art()
+    wstate = storage.load_waifu()
+    waifu_id = story.resolve_active(sys.argv[1:], os.environ, wstate)
+    winfo = story.get_waifu(waifu_id)
+    waifu_art = waifu.load_art_for(waifu_id)
+    face_rgb = waifu.load_rgb_for(waifu_id)
+    face_ok = face_rgb is not None
+    if face_rgb:
+        face_nw, face_nh, face_px = face_rgb
+    else:
+        face_nw, face_nh, face_px = 0, 0, []
+    face_cache_key = None
+    face_cells = []
+    face_pairs = {}
+    gfx_mode = gfx.resolve(sys.argv[1:], os.environ)
+    photo_path = waifu.find_photo(waifu_id) if gfx_mode == "kitty" else None
+    photo_id = 10 + (story.WAIFU_ORDER.index(waifu_id) if waifu_id in story.WAIFU_ORDER else 0)
+    photo_sent = False
+    photo_geom = None
+    bond = float(wstate.get("bond", {}).get(waifu_id, 0.0))
     wmood = "idle"
     wmood_t = 0.0
     wline = 0
+    wstory = ""
+    wstory_t = 0.0
+
+    def save_waifu_state():
+        wstate["active"] = waifu_id
+        if waifu_id not in wstate.get("unlocked", []):
+            wstate["unlocked"] = [*wstate.get("unlocked", []), waifu_id]
+        wstate.setdefault("bond", {})[waifu_id] = max(0.0, bond)
+        storage.save_waifu(storage.DEFAULT_WAIFU, wstate)
+
+    def set_story(text, dur=3.5):
+        nonlocal wstory, wstory_t
+        wstory = text
+        wstory_t = dur
 
     def set_mood(m, dur):
         nonlocal wmood, wmood_t, wline
@@ -137,6 +170,8 @@ def show(stdscr, P):
         enemy_timer = 0.0
         banner = f"WAVE {w} — {ecfg.name}"
         banner_t = 1.6
+        trig = "boss" if w % 5 == 0 else "wave"
+        set_story(story.line_for(waifu_id, trig, {"wave": w, "enemy": ecfg.name}, random.randrange(999)), 4.0)
 
     def add_particle(p):
         if len(particles) >= MAXP:
@@ -168,6 +203,14 @@ def show(stdscr, P):
         last = now
         h, w = stdscr.getmaxyx()
         cx = w // 2
+        if guard.too_small(h, w):
+            if guard.wait_until_fit(stdscr, P) == "quit":
+                save_waifu_state()
+                return
+            stdscr.nodelay(True)
+            stdscr.timeout(frame_ms)
+            last = time.monotonic()
+            continue
         # auto quality: EMA frame time, cek tiap 2 detik (hemat CPU di low-end)
         ema_dt = ema_dt * 0.95 + dt * 0.05
         fps_show = fps_show * 0.95 + (1.0 / max(dt, 1e-3)) * 0.05
@@ -184,6 +227,7 @@ def show(stdscr, P):
         key = stdscr.getch()
         while key != -1:
             if key == 27:
+                save_waifu_state()
                 return
             elif key == curses.KEY_F2:
                 # F2 = putar quality manual (tidak ganggu ketikan, F-key > 255)
@@ -199,6 +243,7 @@ def show(stdscr, P):
             elif key in (curses.KEY_ENTER, 10, 13):
                 elapsed = max(0.05, now - word_start)
                 if buf.strip() == ":q":
+                    save_waifu_state()
                     return
                 shots += 1
                 time_total += elapsed
@@ -225,6 +270,7 @@ def show(stdscr, P):
                     enemy_timer = 0.0
                     sfx_mod.play(stdscr, sfx, "shoot")
                     set_mood("happy", 1.4)
+                    bond = max(0.0, bond + (story.BOND_GAIN["perfect"] if perfect else story.BOND_GAIN["hit"]))
                     # lifesteal + repair on perfect (base sustain)
                     if stats["lifesteal"] > 0:
                         player_hp = min(stats["max_hp"], player_hp + stats["lifesteal"])
@@ -255,6 +301,7 @@ def show(stdscr, P):
                     shake_mag = 2
                     sfx_mod.play(stdscr, sfx, "miss")
                     set_mood("sad", 1.4)
+                    bond = max(0.0, bond + story.BOND_GAIN["miss"])
                 target = words.pick_word(wave)
                 buf = ""
                 word_start = now
@@ -302,6 +349,8 @@ def show(stdscr, P):
             wmood_t -= dt
             if wmood_t <= 0:
                 wmood = "idle"
+        if wstory_t > 0:
+            wstory_t -= dt
 
         disp_e += (enemy_hp - disp_e) * min(1, dt * 6)
         disp_p += (player_hp - disp_p) * min(1, dt * 6)
@@ -415,6 +464,22 @@ def show(stdscr, P):
             spawn_explosion(cx, 8, P["yellow"], n=40)
             sfx_mod.play(stdscr, sfx, "waveclear")
             set_mood("excited", 2.5)
+            bond = max(0.0, bond + story.BOND_GAIN["clear"])
+            newly = story.check_unlocks(wstate.get("unlocked", ["aika"]), wave + 1)
+            if newly:
+                for _uid in newly:
+                    wstate["unlocked"] = [*wstate.get("unlocked", ["aika"]), _uid]
+                    msg = f"{story.get_waifu(_uid)['name']} joined the team! (switch: menu ◄ ►)"
+                    msg_t = 3.0
+                    raw = story.get_waifu(_uid).get("unlock_line") or f"{story.get_waifu(_uid)['name']} joined!"
+                    try:
+                        raw = raw.format(wave=wave + 1, enemy=ecfg.name)
+                    except (IndexError, KeyError):
+                        pass
+                    set_story(raw, 5.0)
+            else:
+                set_story(story.line_for(waifu_id, "clear", {"wave": wave, "enemy": ecfg.name}, random.randrange(999)), 3.0)
+            save_waifu_state()
             t0 = time.monotonic()
             while time.monotonic() - t0 < 1.8:
                 h2, w2 = stdscr.getmaxyx()
@@ -454,10 +519,13 @@ def show(stdscr, P):
             storage.save_best(storage.DEFAULT_BEST, wave, avg_wpm)
             rk = progression.rank_for(avg_wpm, best_combo)
             sfx_mod.play(stdscr, sfx, "gameover")
+            save_waifu_state()
+            defeat_say = story.line_for(waifu_id, "defeat", {"wave": wave, "enemy": ecfg.name}, random.randrange(999))
             widgets.safe_add(stdscr, h // 2 - 2, cx - 12, "BENTENGMU HANCUR", P["red"])
             widgets.safe_add(stdscr, h // 2 - 1, cx - 24, f"wave {wave} | {hits}/{shots} | {acc:.0f}% | {avg_wpm:.0f} WPM | {rk}", P["fg"])
             widgets.safe_add(stdscr, h // 2 + 1, cx - 16, "Enter coba lagi, q keluar", P["dim"])
             widgets.safe_add(stdscr, h // 2 + 2, cx - 20, "sedikit lagi… 1 wave lagi pasti bisa", P["magenta"])
+            widgets.safe_add(stdscr, h // 2 + 3, cx - len(defeat_say) // 2, f"{winfo['name']}: {defeat_say}"[: max(0, w - 4)], P["yellow"])
             stdscr.refresh()
             stdscr.timeout(-1)
             k = stdscr.getch()
@@ -605,21 +673,52 @@ def show(stdscr, P):
             blink = "⌖" if (now * 3) % 1 < 0.7 else "◉"
             widgets.safe_add(stdscr, py - 1, cx + 12, f"{blink}x{stats['turret']}", P["magenta"])
         # ── panel waifu operator (kanan, hanya layar lebar biar tidak sempit) ──
+        # Layout presisi: art berakhir di h-7, nama h-5, dialog h-4 — selalu muat.
+        photo_geom = None
         if w >= 102 and h >= 24:
             px = w - 36
-            widgets.safe_add(stdscr, py - 2, px, "◆ AIKA · operator", P["cyan"])
-            for i, ln in enumerate(waifu_art):
-                widgets.safe_add(stdscr, py - 1 + i, px, ln, P["magenta"] if i < 5 else P["fg"])
-            wy = py - 1 + len(waifu_art)
-            if wy < h - 3:
-                face = waifu.FACES.get(wmood, "(・‿・)")
-                widgets.safe_add(stdscr, wy, px, f"AIKA {face}", P["yellow"] | curses.A_BOLD)
-                if wmood == "idle":
-                    say = waifu.TIPS[int(now / 4) % len(waifu.TIPS)]
+            blv = story.level_for(bond)
+            art_bot = h - 7
+            use_photo = bool(photo_path) and gfx_mode == "kitty"
+            if use_photo or (face_ok and face_rgb):
+                frows = min(18, max(6, (h - 24) // 2 + 8), h - 9)
+                fcols = min(34, max(12, frows * 2))
+                art_top = art_bot - frows + 1
+                widgets.safe_add(stdscr, art_top - 1, px, f"◆ {winfo['name']} · {winfo['title']} ♡{blv}", P["cyan"])
+                if use_photo:
+                    photo_geom = (art_top, px, fcols, frows)
                 else:
-                    pool = waifu.LINES.get(wmood, ["..."])
-                    say = pool[wline % len(pool)]
-                widgets.safe_add(stdscr, wy + 1, px, f"「{say}」", P["dim"])
+                    photo_geom = None
+                    if (fcols, frows) != face_cache_key:
+                        face_cache_key = (fcols, frows)
+                        _cells = face_mod.downsample(face_px, face_nw, face_nh, fcols, frows)
+                        _pal, face_cells = face_mod.quantize(_cells)
+                        face_pairs = face_mod.alloc_pairs(_pal, face_mod.pair_combos(face_cells))
+                        if face_pairs is None:
+                            face_ok = False
+                    if face_ok:
+                        face_mod.draw(stdscr, art_top, px, fcols, face_cells, face_pairs, P["magenta"])
+                    else:
+                        art = waifu_art[: max(4, h - 14)]
+                        atop = art_bot - len(art) + 1
+                        for i, ln in enumerate(art):
+                            widgets.safe_add(stdscr, atop + i, px, ln, P["magenta"] if i < 5 else P["fg"])
+            else:
+                photo_geom = None
+                art = waifu_art[: max(4, h - 14)]
+                art_top = art_bot - len(art) + 1
+                widgets.safe_add(stdscr, art_top - 1, px, f"◆ {winfo['name']} · {winfo['title']} ♡{blv}", P["cyan"])
+                for i, ln in enumerate(art):
+                    widgets.safe_add(stdscr, art_top + i, px, ln, P["magenta"] if i < 5 else P["fg"])
+            mood_face = winfo["faces"].get(wmood, "(・‿・)")
+            widgets.safe_add(stdscr, h - 5, px, f"{winfo['name']} {mood_face}", P["yellow"] | curses.A_BOLD)
+            if wstory_t > 0:
+                say = wstory
+            elif wmood == "idle":
+                say = story.line_for(waifu_id, "idle", seed=int(now / 4))
+            else:
+                say = story.mood_line(waifu_id, wmood, wline)
+            widgets.safe_add(stdscr, h - 4, px, f"「{say}」", P["dim"])
         # heartbeat murah: sudut layar kedip saat HP < 30% (4 addstr saja)
         if player_hp < player_max * 0.3 and player_hp > 0:
             hb = P["red"] | curses.A_BOLD if (now * 3) % 1 < 0.5 else P["dim"]
@@ -638,3 +737,18 @@ def show(stdscr, P):
             widgets.safe_add(stdscr, h - 3, 2, f"{elapsed_word:.1f}s | {live_wpm:.0f} WPM | {combo}x | Enter=tembak", P["dim"])
 
         stdscr.refresh()
+        if photo_geom and photo_path and gfx_mode == "kitty":
+            if not photo_sent:
+                _data = gfx.png_bytes_for(photo_path)
+                if _data:
+                    for _seq in gfx.build_transmit(_data, photo_id):
+                        gfx.emit(_seq)
+                    photo_sent = True
+                else:
+                    photo_path = None
+            if photo_sent:
+                _gy, _gx, _gc, _gr = photo_geom
+                gfx.place_at(_gy, _gx, gfx.build_place(photo_id, 1, _gc, _gr))
+        elif photo_sent:
+            gfx.emit(gfx.build_delete_image(photo_id))
+            photo_sent = False

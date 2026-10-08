@@ -7,6 +7,7 @@ T7 rewires by providing textack.ui.screens.siege with show(stdscr, P).
 """
 import curses
 
+from textack.ui import gfx as gfx_mod
 from textack.ui import palette
 from textack.ui.screens import howto, opening, outro
 
@@ -20,7 +21,10 @@ def game_loop(stdscr):
     except curses.error:
         pass
     while True:
-        act = opening.show(stdscr, P)
+        try:
+            act = opening.show(stdscr, P)
+        finally:
+            gfx_mod.emit(gfx_mod.build_delete_visible())
         if act == "quit":
             outro.show(stdscr, P)
             return
@@ -31,6 +35,9 @@ def game_loop(stdscr):
         # lazy import: siege screen lands in T7
         from textack.ui.screens import siege as siege_mod
 
-        siege_mod.show(stdscr, P)
+        try:
+            siege_mod.show(stdscr, P)
+        finally:
+            gfx_mod.emit(gfx_mod.build_delete_visible())
         # balik ke menu setelah siege keluar (bikin loop nagih)
         continue

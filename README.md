@@ -73,6 +73,14 @@ Detail: `docs/ARCHITECTURE.md`.
 - Musuh per wave: SCOUT → RAIDER → GOLEM → OVERLORD, tiap 5 wave BOSS.
 - Operator waifu AIKA di panel kanan (terminal ≥102 kolom).
   Ganti art: edit `waifu.txt` atau `~/.config/textack/waifu.txt`.
+- RIN (wave 4) & SORA (wave 8) ke-unlock otomatis — ganti operator
+  dengan ◄ ► di menu. Tiap operator punya dialog English + bond level
+  (naik dari perfect/combo). Custom art dari fotomu: `docs/waifu-custom.md`.
+- Minimal terminal 80×24 — kalau kekecilan, game pause + kasih
+  panduan zoom (`Shift + -` zoom out, `Shift + +` balikin).
+- Visual bertingkat: foto asli (Ghostty/WezTerm/kitty, cek
+  `textack --gfx-test`) → wajah berwarna → ASCII. Detail:
+  `docs/waifu-custom.md`.
 - Suara: `sfx/*.wav` via paplay/aplay/mpv (fallback beep, F3 on/off) — taruh file `.wav` sesukamu di `sfx/` (hilang = diam, tidak crash).
 - `:q` untuk keluar
 

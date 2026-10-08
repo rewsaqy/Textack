@@ -8,8 +8,18 @@ def _eprint(*a):
 
 def main():
     if not sys.stdin.isatty():
+        if "--gfx-test" in sys.argv:
+            from textack.ui import gfx
+
+            print(gfx.test_report(sys.argv[1:], os.environ))
+            return
         print("Jalankan di terminal asli: textack")
         sys.exit(1)
+    if "--gfx-test" in sys.argv:
+        from textack.ui import gfx
+
+        print(gfx.test_report(sys.argv[1:], os.environ))
+        return
     os.environ.setdefault("ESCDELAY", "25")
 
     try:
@@ -30,9 +40,24 @@ def main():
         sys.exit(1)
 
     try:
+        from textack.ui import gfx
         from textack.ui.screens.loop import game_loop
+
+        gfx.resolve(sys.argv[1:], os.environ, allow_probe=True)
         curses.wrapper(game_loop)
     except KeyboardInterrupt:
+        pass
+    except curses.error:
+        _eprint(
+            "Terminal ini tidak bisa mode fullscreen (curses).\n"
+            "Coba: Windows Terminal / Ghostty / WezTerm / Konsole / xterm."
+        )
+        sys.exit(2)
+    try:
+        from textack.ui import gfx as _gfx
+
+        _gfx.emit(_gfx.build_delete_visible())
+    except Exception:  # noqa: BLE001, S110
         pass
     print("made by rewsaqy • 2026")
 
