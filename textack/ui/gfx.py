@@ -10,9 +10,7 @@ import base64
 import os
 import select
 import sys
-import termios
 import time
-import tty
 
 APC_START = b"\x1b_G"
 APC_END = b"\x1b\\"
@@ -97,6 +95,11 @@ def place_at(y, x, seq):
 
 def probe(timeout=0.4):
     """Active support check. Only call OUTSIDE curses. Returns bool."""
+    try:
+        import termios
+        import tty
+    except ImportError:
+        return False  # Windows has neither; graphics probe unsupported
     try:
         fd = sys.stdin.fileno()
     except Exception:  # noqa: BLE001

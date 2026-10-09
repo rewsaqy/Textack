@@ -10,7 +10,7 @@ PNG_1PX = base64.b64decode(
 
 
 def test_transmit_roundtrip():
-    data = PNG_1PX * 300  # paksa multi-chunk? kecil -> 1 chunk cukup
+    data = PNG_1PX * 300  # multi-chunk force? small -> 1 chunk is enough
     seqs = gfx.build_transmit(PNG_1PX, 7)
     assert seqs and seqs[0].startswith(b"\x1b_Ga=t,f=100,i=7,")
     assert seqs[-1].startswith(b"\x1b_Gm=0;") or b"m=0" in seqs[-1]
@@ -60,6 +60,16 @@ def test_resolve_forced():
 
 
 def test_probe_no_tty_is_false():
+    assert gfx.probe() is False
+
+
+def test_probe_without_termios_is_false(monkeypatch):
+    """Windows has no termios/tty: importing gfx must work and probe() must
+    return False instead of raising (regression test for win crash)."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "termios", None)
+    monkeypatch.setitem(sys.modules, "tty", None)
     assert gfx.probe() is False
 
 
