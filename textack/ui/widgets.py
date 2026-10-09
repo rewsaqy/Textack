@@ -1,7 +1,17 @@
 # textack/ui/widgets.py
-def safe_add(stdscr, y, x, s, attr=0):
-    import curses
-    h, w = stdscr.getmaxyx()
+import curses
+
+
+def safe_add(stdscr, y, x, s, attr=0, size=None):
+    """Clip-safe addstr. Pass size=(h, w) to skip a getmaxyx call (perf).
+
+    The game loop fetches (h, w) once per frame and passes it down, turning
+    ~80 getmaxyx syscalls per frame into 1.
+    """
+    if size is None:
+        h, w = stdscr.getmaxyx()
+    else:
+        h, w = size
     if y < 0 or y >= h or not s:
         return
     if x >= w or x + len(s) <= 0:
@@ -18,6 +28,7 @@ def safe_add(stdscr, y, x, s, attr=0):
     except curses.error:
         pass
 
+
 def get_field(obj, key):
     """Ledger ruling: Upgrade object (u.id) or dict (u['id'])."""
     try:
@@ -32,6 +43,6 @@ def hp_bar_str(cur, disp, total, width):
     pd = max(0, min(1, disp / total))
     fa = int(width * pa)
     fd = int(width * pd)
-    # optimasi: build via list, bukan += per char
-    out = ["#"] * fa + ["="] * max(0, fd - fa) + ["-"] * max(0, width - max(fa, fd))
-    return f"[{''.join(out)}] {int(cur)}/{total}"
+    # Build via multiplication, not per-char concatenation.
+    out = "#" * fa + "=" * max(0, fd - fa) + "-" * max(0, width - max(fa, fd))
+    return f"[{out}] {int(cur)}/{total}"

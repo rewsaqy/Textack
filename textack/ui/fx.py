@@ -1,10 +1,10 @@
 # textack/ui/fx.py
+import curses
 import time
 
 
 def fade_out(stdscr, dur=0.45):
-    """Fade out halus: overlay ░→▒→▓→█ lalu ke hitam. Optimasi: fill per baris."""
-    import curses
+    """Smooth fade out: overlay ░→▒→▓→█ then to black. Fills per row."""
     h, w = stdscr.getmaxyx()
     if h < 3 or w < 10:
         stdscr.erase()
@@ -25,9 +25,9 @@ def fade_out(stdscr, dur=0.45):
     stdscr.refresh()
     time.sleep(0.08)
 
+
 def fade_in_blank(stdscr, dur=0.35):
-    """Fade in dari hitam: █→▓→▒→░→transparan."""
-    import curses
+    """Fade in from black: █→▓→▒→░→transparent."""
     h, w = stdscr.getmaxyx()
     if h < 3 or w < 10:
         return

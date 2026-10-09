@@ -1,7 +1,9 @@
 # textack/ui/palette.py
+import curses
+
+
 def init():
-    """Palet modern Tokyonight-ish. Fallback 8 warna kalau terminal jadul."""
-    import curses
+    """Modern Tokyonight-ish palette. Falls back to 8 colors on old terminals."""
     P = {}
     try:
         curses.start_color()
@@ -11,7 +13,7 @@ def init():
     colors = getattr(curses, "COLORS", 8) or 8
     try:
         if colors >= 256:
-            # pair id 10+ biar tidak tabrakan
+            # Pair ids 10+ to avoid collisions.
             def mk(i, fg):
                 try:
                     curses.init_pair(i, fg, -1)
@@ -24,7 +26,7 @@ def init():
             mk(14, 221)  # yellow e0af68
             mk(15, 204)  # red f7768e
             mk(16, 240)  # dim gray
-            mk(17, 81)   # cyan terang
+            mk(17, 81)   # bright cyan
             try:
                 P["fg"] = curses.color_pair(10)
                 P["cyan"] = curses.color_pair(11) | curses.A_BOLD

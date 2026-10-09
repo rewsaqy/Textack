@@ -13,7 +13,7 @@ def main():
 
             print(gfx.test_report(sys.argv[1:], os.environ))
             return
-        print("Jalankan di terminal asli: textack")
+        print("Run in a real terminal: textack")
         sys.exit(1)
     if "--gfx-test" in sys.argv:
         from textack.ui import gfx
@@ -27,15 +27,15 @@ def main():
     except ImportError:
         if os.name == "nt":
             _eprint(
-                "curses tidak ketemu di Windows.\n"
-                "Install dulu:  pip install windows-curses\n"
-                "atau:          pip install textack[windows]\n"
-                "lalu jalankan lagi:  textack"
+                "curses not found on Windows.\n"
+                "Install it first:  pip install windows-curses\n"
+                "or:                 pip install textack[windows]\n"
+                "then run again:     textack"
             )
         else:
             _eprint(
-                "curses tidak ketemu. Di Linux biasanya sudah bawaan Python.\n"
-                "Coba: sudo pacman -S ncurses  /  sudo apt install libncurses6"
+                "curses not found. On Linux it usually ships with Python.\n"
+                "Try: sudo pacman -S ncurses  /  sudo apt install libncurses6"
             )
         sys.exit(1)
 
@@ -49,8 +49,8 @@ def main():
         pass
     except curses.error:
         _eprint(
-            "Terminal ini tidak bisa mode fullscreen (curses).\n"
-            "Coba: Windows Terminal / Ghostty / WezTerm / Konsole / xterm."
+            "This terminal cannot do fullscreen mode (curses).\n"
+            "Try: Windows Terminal / Ghostty / WezTerm / Konsole / xterm."
         )
         sys.exit(2)
     try:

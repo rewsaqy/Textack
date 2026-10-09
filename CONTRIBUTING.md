@@ -20,7 +20,7 @@ No network, no build step.
 
 | Layer | Dir | Contains | Add what there |
 |---|---|---|---|
-| core | `textack/core/` | pure logic, no curses, no I/O: `words.py`, `combat.py`, `enemies.py`, `upgrades.py`, `progression.py`, `state.py` | words, damage math, enemy stats, upgrades, rank/XP |
+| core | `textack/core/` | pure logic, no curses, no I/O: `words.py`, `combat.py`, `enemies.py`, `upgrades.py`, `progression.py` | words, damage math, enemy stats, upgrades, rank/XP |
 | ui | `textack/ui/` | curses only: `palette.py`, `widgets.py`, `fx.py`, `screens/` (opening, howto, siege, upgrade, outro, loop) | screens, bars, panels, effects |
 | infra | `textack/infra/` | side effects: `storage.py` (best score), `quality.py` (LOW/HIGH), `waifu.py` (art), `sfx.py` (sound) | persistence, terminal compat, art, sound |
 | entry | `main.py`, `textack/__main__.py` | thin shims → `textack.ui.screens.loop.game_loop` | nothing (keep thin) |
@@ -33,13 +33,19 @@ entry shim and other screens. See `docs/ARCHITECTURE.md`.
 ## Branch → PR flow
 
 ```bash
-git checkout -b feat/my-thing        # or fix/..., content/...
+git checkout -b feat/my-thing        # or fix/..., docs/..., perf/...
 # ... edit + add tests ...
 python3 -m pytest -q
 python3 -m ruff check textack tests
 git add <files>
 git commit -m "feat: short description"
 git push -u origin feat/my-thing
+```
+
+Use the repo commit template so every message stays professional:
+
+```bash
+git config commit.template .gitmessage
 ```
 
 Then open a PR against `main` using the template
@@ -58,6 +64,34 @@ python3 -m compileall -q textack     # what CI also runs
 
 New behavior needs a test. Content tweaks need at least one
 assertion line (see `docs/adding-content.md` for copy-paste recipes).
+
+## Commit convention (professional, enforced in review)
+
+[Conventional Commits](https://www.conventionalcommits.org/) in English,
+imperative mood, ≤72-char subject:
+
+```text
+<type>(<scope>): <short description>
+
+<body — why, optional>
+```
+
+Types: `feat` (new feature), `fix` (bug fix), `perf` (performance),
+`refactor` (no behavior change), `docs`, `test`, `chore`, `ci`.
+
+Scopes: `core`, `ui`, `infra`, or a file area (`siege`, `opening`, `sfx`).
+
+Good:
+
+```text
+feat(siege): cache per-frame interval and rank
+fix(sfx): rate-limit turret sound spam
+docs(readme): clarify Windows install steps
+perf(widgets): pass terminal size to avoid getmaxyx per widget
+```
+
+Bad: `FIRST UPDATE`, `feat: foto ...`, `fix bug`, `update`, any Indonesian
+free-form subject. Squash-merge PRs must keep one conventional subject.
 
 ## Good first issues
 

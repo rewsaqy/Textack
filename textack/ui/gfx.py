@@ -6,6 +6,13 @@ terminal (kitty/Ghostty/WezTerm/...) — verified by an active probe
 BEFORE curses starts, never by guessing. All emits are q=2 (quiet) so
 terminal replies can't leak into the game's key input.
 """
+import base64
+import os
+import select
+import sys
+import termios
+import time
+import tty
 
 APC_START = b"\x1b_G"
 APC_END = b"\x1b\\"
@@ -46,8 +53,6 @@ def forced_mode(argv=None, env=None):
 
 def build_transmit(png_bytes, img_id):
     """Chunked transmit-only seqs (a=t). Returns list[bytes]."""
-    import base64
-
     raw = base64.b64encode(png_bytes)
     seqs = []
     first = True
@@ -77,9 +82,6 @@ def build_delete_visible():
 
 def emit(data):
     try:
-        import os
-        import sys
-
         os.write(sys.stdout.fileno(), data)
     except Exception:  # noqa: BLE001, S110
         pass
@@ -95,17 +97,10 @@ def place_at(y, x, seq):
 
 def probe(timeout=0.4):
     """Active support check. Only call OUTSIDE curses. Returns bool."""
-    import select
-    import sys
-    import termios
-    import tty
-
     try:
         fd = sys.stdin.fileno()
     except Exception:  # noqa: BLE001
         return False
-    import os
-
     try:
         if not os.isatty(fd):
             return False
@@ -119,8 +114,6 @@ def probe(timeout=0.4):
         tty.setraw(fd)
         sys.stdout.buffer.write(b"\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\x1b[c")
         sys.stdout.buffer.flush()
-        import time
-
         buf = b""
         end = time.monotonic() + timeout
         while time.monotonic() < end:
@@ -148,9 +141,6 @@ def probe(timeout=0.4):
 
 def resolve(argv=None, env=None, allow_probe=False):
     """kitty | half | ascii. Probes once (marks TEXTACK_GFX_PROBED)."""
-    import os
-    import sys
-
     real_env = env if env is not None else os.environ
     force = forced_mode(argv, real_env)
     if force == "test":
@@ -190,19 +180,15 @@ def resolve(argv=None, env=None, allow_probe=False):
 
 
 def test_report(argv=None, env=None):
-    import os
-
     env = dict(env if env is not None else os.environ)
-    lines = [f"heuristic-kittty: {detect_heuristic(env)}"]
-    import sys
-
+    lines = [f"heuristic-kitty: {detect_heuristic(env)}"]
     lines.append(f"stdin-isatty: {sys.stdin.isatty()}")
     if sys.stdin.isatty():
-        lines.append(f"probe: {'OK-kittty' if probe() else 'no-graphics'}")
+        lines.append(f"probe: {'OK-kitty' if probe() else 'no-graphics'}")
     else:
-        lines.append("probe: skipped (bukan tty)")
+        lines.append("probe: skipped (not a tty)")
     lines.append(f"resolved: {resolve([a for a in argv if a != '--gfx-test'], env)}")
-    lines.append("(paksa: --gfx=kitty|half|ascii atau TEXTACK_GFX=...)")
+    lines.append("(force: --gfx=kitty|half|ascii or TEXTACK_GFX=...)")
     return "\n".join(lines)
 
 

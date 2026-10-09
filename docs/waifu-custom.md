@@ -1,70 +1,70 @@
-# Custom waifu art — pakai gambarmu sendiri
+# Custom waifu art — use your own picture
 
-Game membaca art sebagai **teks biasa**, jadi gambar apapun harus
-dikonversi dulu ke ASCII/karakter. Spec:
+The game reads art as **plain text**, so any image must first be
+converted to ASCII/characters. Spec:
 
-- File teks `.txt`, maksimal **34 kolom × 24 baris** (lebih = dipotong otomatis)
-- Baris `#` di paling atas = komen/header, diabaikan. Tapi `#` di tengah
-  art = piksel gelap, **ikut tampil** (aman dipakai)
-- Encoding UTF-8 (boleh pakai karakter `♡ ✿ ⌖ ─` dsb)
-- Art tampil penuh di terminal **lebar (≥102 kolom)**. Makin besar
-  terminal = makin besar art yang muat. Terminal kekecilan (< 80×24)
-  otomatis pause + muncul panduan zoom (lihat bawah).
+- `.txt` text file, max **34 columns × 24 rows** (longer = auto-trimmed)
+- `#` lines at the very top = comments/header, ignored. But `#` in the
+  middle of the art = dark pixels, **still shown** (safe to use)
+- UTF-8 encoding (characters like `♡ ✿ ⌖ ─` are fine)
+- Art shows in full on a **wide terminal (≥102 columns)**. Bigger
+  terminal = more art fits. A too-small terminal (< 80×24)
+  auto-pauses + shows the zoom guide (see below).
 
-## Cara 0: web (paling gampang, tanpa install)
+## Way 0: web (easiest, no install)
 
-Buka **text-image.com/convert/ascii.html** → upload foto →
-atur **Image width 30–34 characters** → convert → copy hasilnya
-ke `~/.config/textack/waifus/aika.txt` (tambah baris `# artku` di atas).
+Open **text-image.com/convert/ascii.html** → upload a photo →
+set **Image width 30–34 characters** → convert → copy the result
+to `~/.config/textack/waifus/aika.txt` (add a `# my art` line on top).
 
-Tips biar jelas: crop wajah/dada dulu sebelum upload, nyalakan
-opsi *Extra contrast*, dan pilih foto kontras tinggi (manga B&W
-paling bersih). Jujur: di 30-an kolom, yang kebaca = bentuk +
-arsiran, bukan detail foto. Itu batas wajar ASCII art.
+Tips for clarity: crop the face/bust first, enable
+*Extra contrast*, and pick a high-contrast photo (B&W manga
+is cleanest). Honestly: at ~30 columns what reads is shape +
+shading, not photo detail. That is a fair ASCII-art limit.
 
-## Mode HD: wajah berwarna (disarankan!)
+## HD mode: colored face (recommended!)
 
-ASCII satu warna memang mentok. Game mendukung **wajah berwarna
-(half-block `▄`)** — 2× lebih tajam, jalan di **semua terminal**
-(Linux, Windows Terminal, dll) **tanpa install apa-apa**:
+Single-color ASCII has a ceiling. The game supports a **colored face
+(half-block `▄`)** — 2× sharper, works on **every terminal**
+(Linux, Windows Terminal, etc.) **with zero installs**:
 
 - File: `~/.config/textack/waifus/<id>.rgb.txt`
   (Windows: `%APPDATA%\textack\waifus\<id>.rgb.txt`)
-- Format: baris 1 = `LEBAR TINGGI` (mis. `48 48`), lalu TINGGI baris
-  hex RGB tanpa spasi (`ff0000` = merah). Game otomatis menyesuaikan
-  ukuran + palet 16 warna ke terminalmu. Kalau gagal = balik ke ASCII.
+- Format: line 1 = `WIDTH HEIGHT` (e.g. `48 48`), then HEIGHT rows of
+  spaceless hex RGB (`ff0000` = red). The game auto-fits the
+  size + 16-color palette to your terminal. On failure = back to ASCII.
 
-## Mode FOTO ASLI (terminal modern)
+## REAL PHOTO mode (modern terminals)
 
-Punya Ghostty / WezTerm / kitty? Game bisa menampilkan **foto
-beneran** di panel (protokol gambar kitty, terverifikasi probe —
-bukan tebak-tebakan):
+Got Ghostty / WezTerm / kitty? The game can show a **real photo**
+in the panel (kitty image protocol, probe-verified —
+never guessed):
 
 ```bash
-# 1. cek terminalmu lolos apa tidak (di terminal beneran, bukan IDE):
+# 1. check your terminal (in a real terminal, not an IDE):
 textack --gfx-test
-# 2. kalau "resolved: kitty", taruh foto:
-cp fotomu.png ~/.config/textack/waifus/aika.png   # .png/.jpg/.webp oke
-# 3. main seperti biasa — foto tampil di menu + samping game
+# 2. if it says "resolved: kitty", drop a photo in:
+cp myphoto.png ~/.config/textack/waifus/aika.png   # .png/.jpg/.webp ok
+# 3. play as usual — the photo shows in the menu + beside the game
 ```
 
-- Butuh Pillow sekali: `pip install textack[hd]`
-  (Linux tool install: sudah termasuk otomatis). Tanpa Pillow,
-  hanya `.png` mentah yang bisa ditampilkan.
-- Paksa mode: `textack --gfx=kitty|half|ascii` atau `TEXTACK_GFX=...`
-- Terminal lain (Konsole, GNOME Terminal, Alacritty) otomatis
-  pakai half-block — game tetap jalan, tetap berwarna.
+- Needs Pillow once: `pip install textack[hd]`
+  (Linux tool install: already included automatically). Without Pillow,
+  only raw `.png` can be displayed.
+- Force a mode: `textack --gfx=kitty|half|ascii` or `TEXTACK_GFX=...`
+- Other terminals (Konsole, GNOME Terminal, Alacritty) automatically
+  use half-block — the game still runs, still colored.
 
-Bikin `.rgb.txt` dari foto (butuh Pillow sekali saja):
+Make a `.rgb.txt` from a photo (needs Pillow, once):
 
 ```bash
 pip install pillow
 python3 - <<'EOF'
 from pathlib import Path
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
-src = Image.open("foto.png").convert("RGB")
+src = Image.open("photo.png").convert("RGB")
 W, H = src.size
-# crop wajah: sesuaikan 0.xx dengan fotomu (kiri, atas, kanan, bawah)
+# face crop: tune the 0.xx to your photo (left, top, right, bottom)
 crop = src.crop((int(W*0.33), int(H*0.21), int(W*0.67), int(H*0.45)))
 g = crop.filter(ImageFilter.GaussianBlur(1))
 g = ImageEnhance.Contrast(ImageOps.autocontrast(g, cutoff=2)).enhance(1.15)
@@ -78,43 +78,43 @@ print("saved:", out)
 EOF
 ```
 
-## Lokasi file
+## File locations
 
-| Waifu | Path custom |
+| Waifu | Custom path |
 |---|---|
 | AIKA | `~/.config/textack/waifus/aika.txt` (Windows: `%APPDATA%\textack\waifus\aika.txt`) |
 | RIN | `.../waifus/rin.txt` |
 | SORA | `.../waifus/sora.txt` |
 
-Legacy `waifu.txt` / `~/.config/textack/waifu.txt` masih dibaca
-sebagai override AIKA. Tanpa file custom = art bawaan.
+Legacy `waifu.txt` / `~/.config/textack/waifu.txt` is still read
+as an AIKA override. No custom file = builtin art.
 
-## Cara 1: `jp2a` (cepat, tanpa coding)
-
-```bash
-sudo pacman -S jp2a   # atau: sudo apt install jp2a
-jp2a --width=30 --colors foto.png > ~/.config/textack/waifus/aika.txt
-```
-
-Tips: foto portrait + background polos hasilnya paling bersih.
-Kecilkan dulu ke ~200px kalau art-nya terlalu ramai.
-
-## Cara 2: `chafa` (berwarna, bagus di terminal modern)
+## Way 1: `jp2a` (fast, no coding)
 
 ```bash
-chafa --symbols block --width 30 foto.png
-# kalau cocok, simpan:
-chafa --symbols block --width 30 foto.png > ~/.config/textack/waifus/aika.txt
+sudo pacman -S jp2a   # or: sudo apt install jp2a
+jp2a --width=30 --colors photo.png > ~/.config/textack/waifus/aika.txt
 ```
 
-## Cara 3: Python + Pillow (kontrol penuh)
+Tips: portrait photo + plain background gives the cleanest result.
+Downscale to ~200px first if the art looks too busy.
+
+## Way 2: `chafa` (colored, great on modern terminals)
+
+```bash
+chafa --symbols block --width 30 photo.png
+# if you like it, save it:
+chafa --symbols block --width 30 photo.png > ~/.config/textack/waifus/aika.txt
+```
+
+## Way 3: Python + Pillow (full control)
 
 ```bash
 pip install pillow
 python3 - <<'EOF'
 from pathlib import Path
 from PIL import Image
-img = Image.open("foto.png").convert("L").resize((30, 14))
+img = Image.open("photo.png").convert("L").resize((30, 14))
 chars = " .:-=+*#%@"
 px = img.load()
 lines = ["".join(chars[px[x, y] * len(chars) // 256] for x in range(30)) for y in range(14)]
@@ -125,55 +125,55 @@ print("saved:", out)
 EOF
 ```
 
-## Cek hasil
+## Check the result
 
-Jalankan `textack` di terminal **≥102 kolom** — panel kanan
-menampilkan art barumu. Kalau rusak/lebih lebar, game otomatis
-memotong (tidak crash).
+Run `textack` in a terminal **≥102 columns** — the right panel
+shows your new art. If it is broken/too wide, the game auto-
+trims it (no crash).
 
-## Layar kekecilan? (sensor ukuran terminal)
+## Window too small? (terminal-size guard)
 
-Game butuh minimal **80×24**. Kalau jendela lebih kecil, game
-**pause otomatis** + layar gelap + pesan:
+The game needs at least **80×24**. On a smaller window it
+**auto-pauses** + dark screen + message:
 
 ```text
-!! JENDELA TERLALU KECIL !!
-butuh >= 80x24  kini 60x15
-gedein jendela, atau zoom out:
-  Shift + -  (font kecil)
+!! WINDOW TOO SMALL !!
+need >= 80x24  now 60x15
+enlarge the window, or zoom out:
+  Shift + -  (smaller font)
 ```
 
-- **Gedein jendela**: drag / maximize — art waifu ikut lega
-- **Zoom out `Shift + -`**: font mengecil → kolom muat lebih banyak
-  (art 34 kolom butuh zoom cukup jauh di jendela kecil)
-- **Balikin: `Shift + +`** · keluar: `q`
+- **Enlarge the window**: drag / maximize — waifu art breathes too
+- **Zoom out `Shift + -`**: smaller font → more columns fit
+  (34-column art needs quite some zoom-out on a small window)
+- **Restore: `Shift + +`** · quit: `q`
 
-## Yang perlu di-download (ringkas)
+## What to download (summary)
 
-| Buat apa | Download | Wajib? |
+| For what | Download | Required? |
 |---|---|---|
-| Main + wajah berwarna | — (bawaan game, stdlib only) | — |
-| Foto langsung (.jpg/.webp) | `pip install textack[hd]` (= Pillow) | opsional |
-| Foto ASLI di panel | Ghostty / WezTerm / kitty + cek `textack --gfx-test` | opsional |
-| Convert/preview ASCII | `chafa` (`sudo pacman -S chafa`) | opsional |
+| Play + colored face | — (builtin, stdlib only) | — |
+| Direct photos (.jpg/.webp) | `pip install textack[hd]` (= Pillow) | optional |
+| REAL photo in panel | Ghostty / WezTerm / kitty + check `textack --gfx-test` | optional |
+| ASCII convert/preview | `chafa` (`sudo pacman -S chafa`) | optional |
 
-Kenapa tidak langsung foto asli? Protokol gambar (kitty/sixel)
-cuma jalan di terminal tertentu (Konsole bisa sixel, GNOME Terminal
-tidak, Alacritty tidak). Half-block berwarna jalan di **mana saja**
-termasuk Windows — makanya game pakai itu biar stabil ekspansi.
+Why not real photos directly? Image protocols (kitty/sixel)
+only run on certain terminals (Konsole does sixel, GNOME Terminal
+does not, Alacritty does not). Colored half-block runs **anywhere**
+including Windows — so the game uses it for a stable base.
 
-## Matriks kompatibilitas (dijamin per terminal)
+## Compatibility matrix (guaranteed per terminal)
 
-| Terminal | Foto asli | Wajah warna | ASCII | Suara | Keterangan |
+| Terminal | Real photo | Colored face | ASCII | Sound | Notes |
 |---|---|---|---|---|---|
-| kitty / Ghostty / WezTerm | ✅ | ✅ | ✅ | ✅ | semua fitur, verifikasi `textack --gfx-test` |
-| Konsole / foot / contour | ➖ | ✅ | ✅ | ✅ | sixel belum dipakai game (nanti); half-block penuh |
-| GNOME Terminal / VTE | ➖ | ✅ | ✅ | ✅ | half-block penuh |
-| Alacritty | ➖ | ✅ | ✅ | ✅ | half-block penuh |
+| kitty / Ghostty / WezTerm | ✅ | ✅ | ✅ | ✅ | all features, verify with `textack --gfx-test` |
+| Konsole / foot / contour | ➖ | ✅ | ✅ | ✅ | sixel not used by the game (later); full half-block |
+| GNOME Terminal / VTE | ➖ | ✅ | ✅ | ✅ | full half-block |
+| Alacritty | ➖ | ✅ | ✅ | ✅ | full half-block |
 | Windows Terminal | ➖ | ✅ | ✅ | ✅ | via `windows-curses` + PowerShell audio |
-| CMD / conhost lawas | ➖ | ⚠️ | ✅ | ✅ | warna turun ke 16, ASCII selalu aman |
-| Dumb / IDE panel | ➖ | ➖ | ➖ | ➖ | pesan ramah, disuruh buka terminal asli |
+| Legacy CMD / conhost | ➖ | ⚠️ | ✅ | ✅ | colors drop to 16, ASCII always safe |
+| Dumb / IDE panel | ➖ | ➖ | ➖ | ➖ | friendly message, told to open a real terminal |
 
-Prinsip: **tidak ada terminal yang crash** — fitur terbaik yang
-didukung yang tampil, sisanya fallback otomatis. Paksa manual:
+Principle: **no terminal crashes** — the best supported feature
+shows, the rest falls back automatically. Force manually:
 `textack --gfx=kitty|half|ascii`.

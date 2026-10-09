@@ -11,7 +11,15 @@ PAIR_BASE = 40
 PAIR_CAP = 220
 MAX_COLORS = 16
 
-from textack.infra.waifu import parse_rgb_text  # noqa: F401  (re-export buat pemakai face)
+
+def __getattr__(name):
+    # Lazy compat: `face.parse_rgb_text` historically re-exported the
+    # infra helper. Import on demand so `face` stays curses-free at import.
+    if name == "parse_rgb_text":
+        from textack.infra.waifu import parse_rgb_text
+
+        return parse_rgb_text
+    raise AttributeError(name)
 
 
 def fit_cells(nw, nh, max_cols, max_rows):
@@ -133,8 +141,12 @@ def draw(stdscr, y, x, cols, idx, pairmap, fallback_attr=0):
     """Draw half-block face. Cells missing from pairmap use fallback."""
     from textack.ui.widgets import safe_add
 
+    try:
+        size = stdscr.getmaxyx()
+    except Exception:  # noqa: BLE001
+        size = None
     for pos, (fi, bi) in enumerate(idx):
         r, c = divmod(pos, cols)
         attr = pairmap.get((fi, bi), fallback_attr)
         ch = " " if fi == bi else "▄"
-        safe_add(stdscr, y + r, x + c, ch, attr)
+        safe_add(stdscr, y + r, x + c, ch, attr, size)

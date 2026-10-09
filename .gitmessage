@@ -1,0 +1,8 @@
+# <type>(<scope>): <short imperative description, <=72 chars>
+# Example: feat(siege): cache per-frame interval and rank
+#
+# Types: feat | fix | perf | refactor | docs | test | chore | ci
+# Scopes: core | ui | infra | siege | opening | sfx | readme | ...
+# - English only, imperative mood ("add", not "added")
+# - One logical change per commit
+# - Body (optional) explains WHY, not what

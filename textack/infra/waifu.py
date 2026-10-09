@@ -6,8 +6,8 @@ RIN_DEFAULT = ["      ───○───      ", "     /  ___  \\     ", "   
 SORA_DEFAULT = ["     ⚙ ♡ ⚙       ", '      .-"""-.      ', "     / ^ ^ \\     ", "    |  (o_o)  |    ", "     \\ \\_/ /     ", "    _|_[___]_|_    ", "   / | |⌖| | \\   ", "   |  | |⌖| |  |  ", "   |  |_|_|_|  |  ", "    \\  \\___/  /   ", "     |_______|     ", "    _|  ___  |_    "]
 ART_DEFAULTS = {"aika": DEFAULT, "rin": RIN_DEFAULT, "sora": SORA_DEFAULT}
 FACES = {"idle": "(・‿・)", "happy": "(≧▽≦)", "sad": "(>_<)", "hurt": "(T_T)", "excited": "(☆▽☆)"}
-LINES = {"happy": ["sugoi! kena!", "nice shot, senpai!", "combo naik!"], "sad": ["baka... miss!", "fokus, senpai!", "combo reset..."], "hurt": ["itai! lindungi aku!", "benteng kita!", "kyaa!"], "excited": ["level up! makin kuat!", "power naik!", "yosha!"]}
-TIPS = ["ketik cepat = damage", "PERFECT < jendela emas", "combo = crit ganda", "F2 quality • F3 suara", "combo guard selamatkanmu"]
+LINES = {"happy": ["Sugoi! Direct hit!", "Nice shot, senpai!", "Combo rising!"], "sad": ["Miss... focus!", "Watch the keys, senpai!", "Combo reset..."], "hurt": ["Ouch! Protect me!", "Our fortress!", "Kyaa!"], "excited": ["Level up! Stronger!", "Power rising!", "Yosha!"]}
+TIPS = ["fast typing = damage", "PERFECT < gold window", "combo = double crit", "F2 quality • F3 sound", "combo guard saves you"]
 
 
 def _config_dir():
@@ -20,8 +20,8 @@ def _config_dir():
 
 
 def _read_art_file(p):
-    # Komen '#' hanya berlaku SEBELUM art dimulai (header file).
-    # Baris '#' di tengah art = piksel gelap, jangan dibuang.
+    # '#' comments only apply BEFORE art starts (file header).
+    # '#' lines inside the art are dark pixels, keep them.
     try:
         if not p.exists():
             return []
@@ -79,15 +79,11 @@ def load_rgb_for(wid, extra_paths=None):
     return None
 
 
-def load_art(extra_paths=None):
-    return load_art_for("aika", extra_paths)
-
-
 PHOTO_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 
 def find_photo(wid, extra_paths=None):
-    """Path foto waifu (Pillow: format apa saja) atau None. Fail-silent."""
+    """Waifu photo path (Pillow: any format) or None. Fail-silent."""
     cands = [Path(p) for p in (extra_paths or [])]
     roots = []
     try:

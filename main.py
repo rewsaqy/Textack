@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # main.py — thin shim, keep executable.
-# Dibikin tahan symlink: kalau dijalankan via ~/.local/bin/textack
-# (symlink ke sini), sys.path[0] bisa nyasar ke ~/.local/bin.
-# Jadi paksa project root (folder yang berisi textack/) masuk sys.path.
+# Symlink-safe: when run via ~/.local/bin/textack
+# (a symlink to this file), sys.path[0] may point at ~/.local/bin.
+# So force the project root (the folder containing textack/) onto sys.path.
 import os
 import sys
 

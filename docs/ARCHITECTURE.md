@@ -43,7 +43,6 @@ another screen's internals) fail review even if tests pass.
 | `textack/core/enemies.py` | core | enemy stats per wave | `EnemyConfig(name,interval,dmg,burst,hp,proj,col)`, `for_wave(wave)` |
 | `textack/core/upgrades.py` | core | 14 upgrades | `Upgrade(id,icon,cat,name,desc,max,apply_fn)`, `REGISTRY`, `apply(uid,stats)`, `roll_choices(owned,k,rng)`, `fresh_stats()` |
 | `textack/core/progression.py` | core | rank + XP | `rank_for(wpm,combo)`, `next_threshold(current)`, `gain_xp(...)` |
-| `textack/core/state.py` | core | run state | `GameState` |
 | `textack/ui/palette.py` | ui | color pairs | `init()` |
 | `textack/ui/widgets.py` | ui | bars, panels, input | `hp_bar_str(...)`, `safe_add(...)` |
 | `textack/ui/fx.py` | ui | transitions | `fade_out(...)`, `fade_in_blank(...)` |
@@ -53,9 +52,9 @@ another screen's internals) fail review even if tests pass.
 | `textack/ui/screens/upgrade.py` | ui | level-up picker | — |
 | `textack/ui/screens/outro.py` | ui | game-over screen | — |
 | `textack/ui/screens/loop.py` | ui | screen sequencing | `game_loop(stdscr)` |
-| `textack/infra/storage.py` | infra | best score file | `load_best(...)`, `save_best(...)` |
+| `textack/infra/storage.py` | infra | best score file | `load_best(...)`, `save_best(...)`, `beats_best(...)` |
 | `textack/infra/quality.py` | infra | LOW/HIGH terminal mode | `from_env(...)`, `effective_interval(...)` |
-| `textack/infra/waifu.py` | infra | operator art | `load_art(...)` |
+| `textack/infra/waifu.py` | infra | operator art | `load_art_for(...)`, `load_rgb_for(...)`, `find_photo(...)` |
 | `textack/infra/sfx.py` | infra | sound (paplay/aplay/mpv, beep fallback, silent on miss) | `init(...)`, `play(...)`, `detect_player()` |
 | `main.py` / `textack/__main__.py` | entry | shims | — |
 

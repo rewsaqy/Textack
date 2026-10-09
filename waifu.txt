@@ -1,7 +1,7 @@
-# waifu.txt — custom operator Textack. Baris # = komen (diabaikan).
-# Maks 18 baris, tiap baris ≤34 kolom. Lihat hasil: jalankan textack di terminal ≥102 kolom.
-# Bikin art sendiri dari gambar: `ascii-image-converter foto.png -w 30` atau `jp2a foto.jpg --width=30`.
-# Contoh situs: text-image.com/convert/ascii.html — paste hasilnya di bawah (tanpa #).
+# waifu.txt — custom Textack operator. Lines starting with # are comments (ignored).
+# Max 18 lines, each line ≤34 columns. Preview: run textack in a terminal ≥102 columns.
+# Make your own art from a photo: `ascii-image-converter photo.png -w 30` or `jp2a photo.jpg --width=30`.
+# Web option: text-image.com/convert/ascii.html — paste the result below (without #).
      ✿   ♡   ✿
       .-"""-.
      / .--. \

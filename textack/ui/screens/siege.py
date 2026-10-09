@@ -1,13 +1,10 @@
 # textack/ui/screens/siege.py
-"""Siege loop — verbatim move from main.py:619-1237 siege().
+"""Siege loop: typing = damage.
 
-Render/particle/star/shake code pixel-identical; math delegated to core:
-enemies.for_wave, words.pick_word, combat.resolve_hit (PRE-increment combo),
-combat.combo_step, progression.rank_for/gain_xp/next_threshold,
-upgrades.fresh_stats/roll_choices/apply, quality.effective_interval,
-infra.storage/sfx/waifu. Upgrade objects use attr access via _get helper
-(same pattern as upgrade.py). Game-over path stays in siege (T6 deferred:
-no outro after siege); loop.py nagih-loop unchanged.
+Render/particle/star/shake code; math delegated to core:
+enemies.for_wave, words.pick_word, combat.resolve_hit/combo_step,
+progression.rank_for/gain_xp/next_threshold, upgrades.fresh_stats/
+/roll_choices/apply, quality.effective_interval, infra.storage/sfx/waifu.
 """
 import curses
 import os
@@ -28,12 +25,12 @@ ENEMY_ART = [
     r"      |>>>|      ",
     r"      |   |___   ",
     r"  _   |     | ___",
-    r" |_|  | BENTENG |",
+    r" |_|  | FORTRESS |",
     r" |_|__|_________|",
 ]
 PLAYER_ART = [
     r"  .-----------------.  ",
-    r"  |  BENTENG KAMU   |  ",
+    r"  |   YOUR FORT     |  ",
     r"  |___         _____|  ",
     r"  |_|_|_______|_|_|_|  ",
 ]
@@ -46,7 +43,8 @@ def show(stdscr, P):
     except curses.error:
         pass
 
-    # quality: default MED (aman low-end). F2 = ganti manual, auto-turun kalau berat.
+    # quality: default MED (safe on low-end). F2 = cycle manually,
+    # auto-drops when the frame time gets heavy.
     qi = quality.from_env(sys.argv[1:], os.environ)
     frame_ms = max(1, int(1000 / quality.QLEVELS[qi]["fps"]))
     stdscr.timeout(frame_ms)
@@ -74,7 +72,7 @@ def show(stdscr, P):
     shots = hits = 0
     correct_chars_total = 0
     time_total = 0.0
-    # XP / level Survivor-style
+    # XP / level, Survivor-style
     xp = 0.0
     xp_next = 30.0
     level = 1
@@ -83,7 +81,7 @@ def show(stdscr, P):
     banner = ""
     banner_t = 0.0
     last_flash_on = False
-    # suara + waifu operator
+    # sound + operator state
     sfx = sfx_mod.init()
     wstate = storage.load_waifu()
     waifu_id = story.resolve_active(sys.argv[1:], os.environ, wstate)
@@ -109,6 +107,23 @@ def show(stdscr, P):
     wline = 0
     wstory = ""
     wstory_t = 0.0
+    # Best score kept in memory; disk only written when beaten (perf:
+    # avoids a read+write+mkdir on every single hit).
+    best_mem = storage.load_best()
+    # Cached per-frame values (recomputed only when inputs change).
+    cur_interval = quality.effective_interval(ecfg.interval, stats["slow"])
+    rk_live = "NEWBIE"
+    rk_t = -10.0
+    rk_combo = -1
+    rk_avg_q = -1.0
+    idle_seed_cache = -1
+    idle_line_cache = ""
+
+    def maybe_save_best(wv, wpm):
+        if storage.beats_best(best_mem, wv, wpm):
+            best_mem["wave"] = wv
+            best_mem["wpm"] = wpm
+            storage.save_best(storage.DEFAULT_BEST, wv, wpm)
 
     def save_waifu_state():
         wstate["active"] = waifu_id
@@ -136,7 +151,7 @@ def show(stdscr, P):
     shake_t = 0.0
     shake_mag = 0
     enemy_timer = 0.0
-    msg = "Ketik + Enter untuk menembak! :q keluar (F2 quality • F3 suara)"
+    msg = "Type + Enter to shoot! :q quits (F2 quality • F3 sound)"
     msg_t = 3.0
     flash = 0.0
     last = time.monotonic()
@@ -147,7 +162,7 @@ def show(stdscr, P):
         MAXP = quality.QLEVELS[qi]["maxp"]
         frame_ms = max(1, int(1000 / quality.QLEVELS[qi]["fps"]))
         stdscr.timeout(frame_ms)
-        # pangkas bintang & partikel ke budget baru (langsung ringan)
+        # trim stars & particles to the new budget (instantly lighter)
         hq, wq = stdscr.getmaxyx()
         want = min(60, max(8, (wq * hq) // quality.QLEVELS[qi]["stars_div"]))
         if len(stars) > want:
@@ -155,11 +170,8 @@ def show(stdscr, P):
         if len(particles) > MAXP:
             del particles[0: len(particles) - MAXP]
 
-    def interval_eff():
-        return quality.effective_interval(ecfg.interval, stats["slow"])
-
     def new_wave(w):
-        nonlocal enemy_max, enemy_hp, disp_e, target, buf, word_start, enemy_timer, ecfg, banner, banner_t
+        nonlocal enemy_max, enemy_hp, disp_e, target, buf, word_start, enemy_timer, ecfg, banner, banner_t, cur_interval
         ecfg = enemies.for_wave(w)
         enemy_max = float(ecfg.hp)
         enemy_hp = float(enemy_max)
@@ -168,6 +180,7 @@ def show(stdscr, P):
         buf = ""
         word_start = time.monotonic()
         enemy_timer = 0.0
+        cur_interval = quality.effective_interval(ecfg.interval, stats["slow"])
         banner = f"WAVE {w} — {ecfg.name}"
         banner_t = 1.6
         trig = "boss" if w % 5 == 0 else "wave"
@@ -175,7 +188,7 @@ def show(stdscr, P):
 
     def add_particle(p):
         if len(particles) >= MAXP:
-            # buang paling tua biar fps stabil (optimasi mantap)
+            # drop oldest so fps stays stable
             del particles[0: len(particles) - MAXP + 1]
         particles.append(p)
 
@@ -192,7 +205,7 @@ def show(stdscr, P):
             })
 
     new_wave(1)
-    # bintang adaptif layar + quality (animasi murah, 1 addstr per bintang)
+    # adaptive starfield (cheap animation, 1 addstr per star)
     h0, w0 = stdscr.getmaxyx()
     stars = [{"x": random.random() * max(1, w0), "y": random.random() * max(1, h0),
               "sp": random.uniform(2, 10)} for _ in range(min(60, max(8, (w0 * h0) // quality.QLEVELS[qi]["stars_div"])))]
@@ -202,6 +215,7 @@ def show(stdscr, P):
         dt = min(0.05, now - last)
         last = now
         h, w = stdscr.getmaxyx()
+        size = (h, w)
         cx = w // 2
         if guard.too_small(h, w):
             if guard.wait_until_fit(stdscr, P) == "quit":
@@ -211,7 +225,7 @@ def show(stdscr, P):
             stdscr.timeout(frame_ms)
             last = time.monotonic()
             continue
-        # auto quality: EMA frame time, cek tiap 2 detik (hemat CPU di low-end)
+        # auto quality: EMA frame time, checked every 2s (cheap on low-end)
         ema_dt = ema_dt * 0.95 + dt * 0.05
         fps_show = fps_show * 0.95 + (1.0 / max(dt, 1e-3)) * 0.05
         qcheck_t += dt
@@ -219,10 +233,12 @@ def show(stdscr, P):
             qcheck_t = 0.0
             if ema_dt > 1.0 / (quality.QLEVELS[qi]["fps"] * 0.75) and qi < 2:
                 set_quality(qi + 1)
-                msg = f"Mode hemat aktif ({quality.QLEVELS[qi]['name']}) biar mulus di device ini"
+                msg = f"Power-saver on ({quality.QLEVELS[qi]['name']}) to keep it smooth"
                 msg_t = 2.0
-            elif ema_dt < 1.0 / (quality.QLEVELS[qi]["fps"] * 1.6) and qi > 0 and qi == 2:
-                pass  # tetap LOW kalau user/device low-end, tidak naik otomatis
+            # stays LOW once the user/device is low-end, never auto-upgrades
+
+        # refresh cached attack interval when slow stat may have changed
+        cur_interval = quality.effective_interval(ecfg.interval, stats["slow"])
 
         key = stdscr.getch()
         while key != -1:
@@ -230,13 +246,13 @@ def show(stdscr, P):
                 save_waifu_state()
                 return
             elif key == curses.KEY_F2:
-                # F2 = putar quality manual (tidak ganggu ketikan, F-key > 255)
+                # F2 = cycle quality manually (F-keys are > 255, never clash)
                 set_quality((qi + 1) % 3)
-                msg = f"Quality: {quality.QLEVELS[qi]['name']} {quality.QLEVELS[qi]['fps']}fps (F2 ganti)"
+                msg = f"Quality: {quality.QLEVELS[qi]['name']} {quality.QLEVELS[qi]['fps']}fps (F2 changes)"
                 msg_t = 2.0
             elif key == curses.KEY_F3:
                 sfx["on"] = not sfx["on"]
-                msg = f"Suara: {'ON' if sfx['on'] else 'OFF'} (F3 ganti)"
+                msg = f"Sound: {'ON' if sfx['on'] else 'OFF'} (F3 changes)"
                 msg_t = 2.0
             elif key in (curses.KEY_BACKSPACE, 127, 8):
                 buf = buf[:-1]
@@ -259,13 +275,13 @@ def show(stdscr, P):
                                         "char": "▲", "attr": P["green"],
                                         "pending": float(dmg), "side": "player",
                                         "label": f"-{dmg}{tag} {wpm:.0f}wpm"})
-                    # muzzle flash murah: 4 partikel pendek di moncong base
+                    # cheap muzzle flash: 4 short particles at the base muzzle
                     for _ in range(4):
                         add_particle({"x": cx + random.uniform(-1.5, 1.5), "y": float(h - 8),
                                               "vx": random.uniform(-6, 6), "vy": random.uniform(-14, -4),
                                               "life": 0.22, "max": 0.22,
                                               "char": random.choice(["*", "+", "."]), "attr": P["yellow"]})
-                    msg = f"KENA -{dmg}{tag} | {elapsed:.2f}s | {wpm:.0f} WPM | combo {combo}"
+                    msg = f"HIT -{dmg}{tag} | {elapsed:.2f}s | {wpm:.0f} WPM | combo {combo}"
                     msg_t = 1.6
                     enemy_timer = 0.0
                     sfx_mod.play(stdscr, sfx, "shoot")
@@ -279,18 +295,16 @@ def show(stdscr, P):
                     # XP Survivor-style
                     xp += progression.gain_xp(len(target), wave, stats["xp_mult"], wave % 5 == 0)
                     avg = (correct_chars_total / 5) / (time_total / 60) if time_total > 0 else 0
-                    storage.save_best(storage.DEFAULT_BEST, wave, avg)
+                    maybe_save_best(wave, avg)
                 else:
-                    # combo guard: peluang combo selamat
-                    # legacy showed GUARD even at combo 0 on a lucky roll;
-                    # current gates the message on combo>0 (message-only, no state delta).
+                    # combo guard: chance the combo survives
                     kept = combat.combo_step(False, combo, stats["combo_guard"])
                     if combo > 0 and kept == combo:
-                        msg = f"Hampir! combo x{combo} selamat (GUARD)"
-                        combo = kept  # tahan
+                        msg = f"Close! combo x{combo} saved (GUARD)"
+                        combo = kept  # hold
                     else:
                         combo = 0
-                        msg = f"Meleset! '{buf}' != '{target}' — combo reset!"
+                        msg = f"Miss! '{buf}' != '{target}' — combo reset!"
                     counter = combat.miss_damage(ecfg.dmg, wave, random.randint(0, 4))
                     projectiles.append({"x": cx + random.randint(-6, 6), "y": 8.0, "vy": 26.0,
                                         "char": ecfg.proj, "attr": P[ecfg.col],
@@ -310,21 +324,21 @@ def show(stdscr, P):
             key = stdscr.getch()
 
         elapsed_word = now - word_start
-        # regen base tiap detik (Survivor sustain)
+        # base regen per second (Survivor sustain)
         if stats["regen"] > 0 and player_hp > 0:
             player_hp = min(stats["max_hp"], player_hp + stats["regen"] * dt)
         enemy_timer += dt
-        if enemy_timer >= interval_eff():
+        if enemy_timer >= cur_interval:
             enemy_timer = 0.0
-            # burst sesuai wave: makin tinggi wave makin banyak proyektil
+            # burst scales with wave: higher wave = more projectiles
             for b in range(ecfg.burst):
                 chip = ecfg.dmg + random.randint(0, 3)
                 projectiles.append({"x": cx + random.randint(-8, 8) + b * 2, "y": 8.0 - b * 1.2, "vy": 24.0,
                                     "char": ecfg.proj, "attr": P[ecfg.col],
                                     "pending": float(chip), "side": "enemy", "label": f"-{chip}"})
-            msg = f"{ecfg.name} menyerang x{ecfg.burst}! Cepat ketik!"
+            msg = f"{ecfg.name} attacks x{ecfg.burst}! Type fast!"
             msg_t = 1.2
-        # auto cannon base (DPS pasif ala Survivor.io)
+        # base auto cannon (passive Survivor.io-style DPS)
         if stats["turret"] > 0 and enemy_hp > 0:
             turret_t += dt
             t_interval = max(3.0, 8.0 - 0.6 * stats["turret"])
@@ -385,7 +399,7 @@ def show(stdscr, P):
                 flash = 0.07
                 sfx_mod.play(stdscr, sfx, "hit")
             else:
-                # shield: peluang block penuh
+                # shield: full-block chance
                 if random.random() < stats["shield"]:
                     spawn_explosion(p["x"], h - 8, P["cyan"], n=10)
                     floaters.append({"x": p["x"] + 1, "y": h - 10.0, "text": "BLOCK",
@@ -410,18 +424,18 @@ def show(stdscr, P):
         if len(particles) > MAXP:
             del particles[0: len(particles) - MAXP]
         else:
-            particles = [p for p in particles if p["life"] > 0]
+            particles[:] = [p for p in particles if p["life"] > 0]
         for f in floaters:
             f["life"] -= dt
             f["y"] -= 3.5 * dt
-        floaters = [f for f in floaters if f["life"] > 0]
+        floaters[:] = [f for f in floaters if f["life"] > 0]
 
-        # sync max HP dari upgrade wall
+        # sync max HP from the wall upgrade
         player_max = float(stats["max_hp"])
         if disp_p > player_max + 1:
             disp_p = player_max
 
-        # LEVEL UP -> overlay upgrade Survivor-style (bisa beruntun)
+        # LEVEL UP -> Survivor-style upgrade overlay (can chain)
         while xp >= xp_next:
             xp -= xp_next
             level += 1
@@ -432,11 +446,11 @@ def show(stdscr, P):
             choices = upgrades.roll_choices(owned, k=3)
             if not choices:
                 break
-            # ledakan fresh sebelum pilih
+            # fresh explosion before picking
             spawn_explosion(cx, h // 2, P["yellow"], n=30)
             floaters.append({"x": cx - 4, "y": h // 2 - 1.0, "text": f"LEVEL {level}!",
                              "life": 1.2, "max": 1.2, "attr": P["yellow"]})
-            # render satu frame biar ledakan kelihatan sebelum overlay
+            # render one frame so the explosion shows before the overlay
             stdscr.refresh()
             pick = upgrade_screen.show(stdscr, P, choices, level, owned)
             u = choices[pick]
@@ -448,19 +462,20 @@ def show(stdscr, P):
             if get_field(u, "id") == "wall":
                 player_hp = min(stats["max_hp"], player_hp + 25)
             player_max = float(stats["max_hp"])
+            cur_interval = quality.effective_interval(ecfg.interval, stats["slow"])
             spawn_explosion(cx, h - 8, P["green"], n=30)
             floaters.append({"x": cx - 6, "y": h - 10.0, "text": f"+ {get_field(u, 'name')}",
                              "life": 1.4, "max": 1.4, "attr": P["green"]})
             msg = f"UPGRADE: {get_field(u, 'name')} — {get_field(u, 'desc')}"
             msg_t = 2.2
-            # reset timer input biar adil setelah milih
+            # fair input timer after picking
             word_start = time.monotonic()
             last = time.monotonic()
 
         if enemy_hp <= 0:
             acc = (hits / shots * 100) if shots else 100
             avg_wpm = (correct_chars_total / 5) / (time_total / 60) if time_total > 0 else 0
-            storage.save_best(storage.DEFAULT_BEST, wave, avg_wpm)
+            maybe_save_best(wave, avg_wpm)
             spawn_explosion(cx, 8, P["yellow"], n=40)
             sfx_mod.play(stdscr, sfx, "waveclear")
             set_mood("excited", 2.5)
@@ -483,16 +498,17 @@ def show(stdscr, P):
             t0 = time.monotonic()
             while time.monotonic() - t0 < 1.8:
                 h2, w2 = stdscr.getmaxyx()
+                size2 = (h2, w2)
                 stdscr.erase()
                 for pt in particles:
                     pt["life"] -= 0.016
                     pt["x"] += pt["vx"] * 0.016
                     pt["y"] += pt["vy"] * 0.016
-                particles = [p for p in particles if p["life"] > 0]
+                particles[:] = [p for p in particles if p["life"] > 0]
                 for pt in particles:
-                    widgets.safe_add(stdscr, int(pt["y"]), int(pt["x"]), pt["char"], pt["attr"])
-                widgets.safe_add(stdscr, h2 // 2 - 1, w2 // 2 - 14, f"WAVE {wave} HANCUR!", P["yellow"])
-                widgets.safe_add(stdscr, h2 // 2, w2 // 2 - 20, f"{acc:.0f}% | {avg_wpm:.0f} WPM | combo max {best_combo} | Enter lanjut", P["cyan"])
+                    widgets.safe_add(stdscr, int(pt["y"]), int(pt["x"]), pt["char"], pt["attr"], size2)
+                widgets.safe_add(stdscr, h2 // 2 - 1, w2 // 2 - 14, f"WAVE {wave} DESTROYED!", P["yellow"], size2)
+                widgets.safe_add(stdscr, h2 // 2, w2 // 2 - 20, f"{acc:.0f}% | {avg_wpm:.0f} WPM | max combo {best_combo} | Enter to continue", P["cyan"], size2)
                 stdscr.refresh()
                 time.sleep(0.033)
             stdscr.nodelay(False)
@@ -516,21 +532,21 @@ def show(stdscr, P):
             stdscr.erase()
             acc = (hits / shots * 100) if shots else 100
             avg_wpm = (correct_chars_total / 5) / (time_total / 60) if time_total > 0 else 0
-            storage.save_best(storage.DEFAULT_BEST, wave, avg_wpm)
+            maybe_save_best(wave, avg_wpm)
             rk = progression.rank_for(avg_wpm, best_combo)
             sfx_mod.play(stdscr, sfx, "gameover")
             save_waifu_state()
             defeat_say = story.line_for(waifu_id, "defeat", {"wave": wave, "enemy": ecfg.name}, random.randrange(999))
-            widgets.safe_add(stdscr, h // 2 - 2, cx - 12, "BENTENGMU HANCUR", P["red"])
-            widgets.safe_add(stdscr, h // 2 - 1, cx - 24, f"wave {wave} | {hits}/{shots} | {acc:.0f}% | {avg_wpm:.0f} WPM | {rk}", P["fg"])
-            widgets.safe_add(stdscr, h // 2 + 1, cx - 16, "Enter coba lagi, q keluar", P["dim"])
-            widgets.safe_add(stdscr, h // 2 + 2, cx - 20, "sedikit lagi… 1 wave lagi pasti bisa", P["magenta"])
-            widgets.safe_add(stdscr, h // 2 + 3, cx - len(defeat_say) // 2, f"{winfo['name']}: {defeat_say}"[: max(0, w - 4)], P["yellow"])
+            widgets.safe_add(stdscr, h // 2 - 2, cx - 12, "YOUR FORT HAS FALLEN", P["red"], size)
+            widgets.safe_add(stdscr, h // 2 - 1, cx - 24, f"wave {wave} | {hits}/{shots} | {acc:.0f}% | {avg_wpm:.0f} WPM | {rk}", P["fg"], size)
+            widgets.safe_add(stdscr, h // 2 + 1, cx - 16, "Enter retries, q quits", P["dim"], size)
+            widgets.safe_add(stdscr, h // 2 + 2, cx - 20, "so close… one more wave, you got this", P["magenta"], size)
+            widgets.safe_add(stdscr, h // 2 + 3, cx - len(defeat_say) // 2, f"{winfo['name']}: {defeat_say}"[: max(0, w - 4)], P["yellow"], size)
             stdscr.refresh()
             stdscr.timeout(-1)
             k = stdscr.getch()
-            if k == -1 or (k != 10 and k != 13 and chr(k).lower() != "y" and k != ord(" ")):
-                # q / esc / apapun selain enter = tanya sekali lagi secara simpel: q keluar
+            if k == -1 or (k != 10 and k != 13 and k != ord(" ") and not (32 <= k <= 126 and chr(k).lower() == "y")):
+                # q / esc / anything but enter = simple confirm: q quits
                 try:
                     if chr(k).lower() == "q":
                         return
@@ -566,7 +582,7 @@ def show(stdscr, P):
             last = time.monotonic()
             continue
 
-        # render (ringan: bkgd hanya saat status flash berubah, shake hanya saat goyang)
+        # render (light: background only flips on flash change, shake only shakes)
         stdscr.erase()
         flash_on = flash > 0
         if flash_on != last_flash_on:
@@ -584,38 +600,42 @@ def show(stdscr, P):
             shy = 0
 
         for s in stars:
-            widgets.safe_add(stdscr, int(s["y"]) % max(1, h), int(s["x"]) % max(1, w), ".", P["cyan_dim"])
+            widgets.safe_add(stdscr, int(s["y"]) % max(1, h), int(s["x"]) % max(1, w), ".", P["cyan_dim"], size)
 
         avg_live = (correct_chars_total / 5) / (time_total / 60) if time_total > 0.5 else 0
-        rk_live = progression.rank_for(avg_live, combo)
-        # ── ZONA ATAS: musuh (terpisah jelas dari status player) ──
-        widgets.safe_add(stdscr, 0, 2, f"TEXTACK v{VERSION}  W{wave} COMBO x{combo} {rk_live}", P["fg"])
-        widgets.safe_add(stdscr, 1, 2, f"▼ {ecfg.name} {widgets.hp_bar_str(enemy_hp, disp_e, enemy_max, min(34, w-30))}", P["red"])
-        # combo meter + quality/sfx mungil (1 addstr digabung biar hemat)
+        # rank is pure but string-heavy; refresh at most 2x/sec or on combo change
+        avg_q = round(avg_live)
+        if combo != rk_combo or avg_q != rk_avg_q or now - rk_t > 0.5:
+            rk_live = progression.rank_for(avg_live, combo)
+            rk_combo, rk_avg_q, rk_t = combo, avg_q, now
+        # ── TOP ZONE: enemy (clearly separated from player status) ──
+        widgets.safe_add(stdscr, 0, 2, f"TEXTACK v{VERSION}  W{wave} COMBO x{combo} {rk_live}", P["fg"], size)
+        widgets.safe_add(stdscr, 1, 2, f"▼ {ecfg.name} {widgets.hp_bar_str(enemy_hp, disp_e, enemy_max, min(34, w-30))}", P["red"], size)
+        # combo meter + tiny quality/sfx (1 merged addstr to save calls)
         cw = min(16, w - 10)
         cfill = int(cw * min(1, combo / 10))
         sfx_s = "♪" if sfx["on"] else "×"
-        widgets.safe_add(stdscr, 0, max(0, w - cw - 28), f"[{'█'*cfill}{'·'*(cw-cfill)}] {quality.QLEVELS[qi]['name']} {sfx_s}", P["magenta"])
+        widgets.safe_add(stdscr, 0, max(0, w - cw - 28), f"[{'█'*cfill}{'·'*(cw-cfill)}] {quality.QLEVELS[qi]['name']} {sfx_s}", P["magenta"], size)
 
         bob = int((now * 2) % 2)
         ey = 6 + shy + bob
-        # telegraph murah: musuh kedip bold saat mau nyerang (>80% timer)
-        tele = (enemy_timer / interval_eff()) > 0.8
+        # cheap telegraph: enemy flashes bold when about to attack (>80% timer)
+        tele = (enemy_timer / cur_interval) > 0.8
         ecol = P[ecfg.col] | (curses.A_BOLD if tele else 0)
         for i, line in enumerate(ENEMY_ART):
-            widgets.safe_add(stdscr, ey + i, cx - len(line) // 2 + shx, line, ecol)
-        # nama + interval musuh (transparan biar taktik)
-        widgets.safe_add(stdscr, ey + len(ENEMY_ART) + 1, cx - 14 + shx, f"{ecfg.name} HP{int(max(0,enemy_hp))} ATK/{interval_eff():.1f}s", ecol)
-        # banner wave slide-in (murah: 1-2 addstr, lerp posisi)
+            widgets.safe_add(stdscr, ey + i, cx - len(line) // 2 + shx, line, ecol, size)
+        # enemy name + interval (transparent tactics)
+        widgets.safe_add(stdscr, ey + len(ENEMY_ART) + 1, cx - 14 + shx, f"{ecfg.name} HP{int(max(0,enemy_hp))} ATK/{cur_interval:.1f}s", ecol, size)
+        # wave banner slide-in (cheap: 1-2 addstrs, lerped position)
         if banner_t > 0:
             bx = int(cx - len(banner) // 2 + (banner_t * 14))
             balpha = P["yellow"] | curses.A_BOLD if (now * 4) % 1 < 0.7 else P["yellow"]
-            widgets.safe_add(stdscr, ey - 2, max(1, min(bx, w - len(banner) - 1)), banner, balpha)
+            widgets.safe_add(stdscr, ey - 2, max(1, min(bx, w - len(banner) - 1)), banner, balpha, size)
 
         ty = ey + len(ENEMY_ART) + 3
-        # target 3-segmen (hemat: 3-4 addstr, bukan per-huruf)
+        # 3-segment target (cheap: 3-4 addstrs, not per-letter)
         tx = cx - len(target) // 2
-        widgets.safe_add(stdscr, ty, tx - 2, "> ", P["fg"])
+        widgets.safe_add(stdscr, ty, tx - 2, "> ", P["fg"], size)
         n_ok = 0
         first_bad = -1
         for i in range(min(len(buf), len(target))):
@@ -628,52 +648,52 @@ def show(stdscr, P):
             if len(buf) >= len(target):
                 n_ok = len(target)
         if n_ok > 0:
-            widgets.safe_add(stdscr, ty, tx, target[:n_ok], P["green"])
+            widgets.safe_add(stdscr, ty, tx, target[:n_ok], P["green"], size)
         if first_bad >= 0:
-            widgets.safe_add(stdscr, ty, tx + first_bad, target[first_bad: first_bad + 1], P["red"] | curses.A_BOLD)
+            widgets.safe_add(stdscr, ty, tx + first_bad, target[first_bad: first_bad + 1], P["red"] | curses.A_BOLD, size)
             if first_bad + 1 < len(target):
-                widgets.safe_add(stdscr, ty, tx + first_bad + 1, target[first_bad + 1:], P["fg"])
+                widgets.safe_add(stdscr, ty, tx + first_bad + 1, target[first_bad + 1:], P["fg"], size)
         else:
             rest = target[n_ok:]
             if rest:
-                widgets.safe_add(stdscr, ty, tx + n_ok, rest[0], curses.A_REVERSE)
+                widgets.safe_add(stdscr, ty, tx + n_ok, rest[0], curses.A_REVERSE, size)
                 if len(rest) > 1:
-                    widgets.safe_add(stdscr, ty, tx + n_ok + 1, rest[1:], P["fg"])
-        tfrac = max(0, min(1, elapsed_word / interval_eff()))
+                    widgets.safe_add(stdscr, ty, tx + n_ok + 1, rest[1:], P["fg"], size)
+        tfrac = max(0, min(1, elapsed_word / cur_interval))
         tw = min(30, w - 10)
         tfill = int(tw * (1 - tfrac))
-        # timer berubah warna hijau->kuning->merah (feedback adiktif)
+        # timer shifts green->yellow->red (addictive feedback)
         tcol = P["green"] if tfrac < 0.5 else (P["yellow"] if tfrac < 0.8 else P["red"])
-        widgets.safe_add(stdscr, ty + 1, cx - tw // 2, "[" + "━" * tfill + " " * (tw - tfill) + "]", tcol)
+        widgets.safe_add(stdscr, ty + 1, cx - tw // 2, "[" + "━" * tfill + " " * (tw - tfill) + "]", tcol, size)
 
         for p in projectiles:
-            widgets.safe_add(stdscr, int(p["y"]), int(p["x"]), p["char"], p["attr"])
+            widgets.safe_add(stdscr, int(p["y"]), int(p["x"]), p["char"], p["attr"], size)
         for pt in particles:
             a = pt["attr"] | (curses.A_DIM if pt["life"] < pt["max"] * 0.4 else curses.A_BOLD)
-            widgets.safe_add(stdscr, int(pt["y"]), int(pt["x"]), pt["char"], a)
+            widgets.safe_add(stdscr, int(pt["y"]), int(pt["x"]), pt["char"], a, size)
         for f in floaters:
             alpha = curses.A_BOLD if f["life"] > f["max"] * 0.4 else curses.A_DIM
-            widgets.safe_add(stdscr, int(f["y"]), int(f["x"]), f["text"], f["attr"] | alpha)
+            widgets.safe_add(stdscr, int(f["y"]), int(f["x"]), f["text"], f["attr"] | alpha, size)
 
         py = h - 7
-        # ── ZONA BAWAH: status player nempel benteng sendiri (terpisah dari musuh) ──
-        widgets.safe_add(stdscr, py - 2, 2, f"▲ KAMU {widgets.hp_bar_str(player_hp, disp_p, player_max, min(34, w-30))}", P["green"])
+        # ── BOTTOM ZONE: player status glued to your own fort ──
+        widgets.safe_add(stdscr, py - 2, 2, f"▲ YOU {widgets.hp_bar_str(player_hp, disp_p, player_max, min(34, w-30))}", P["green"], size)
         xw = min(14, max(6, w - 60))
         xfill = int(xw * min(1, xp / max(1, xp_next)))
         turret_s = f" ⌖{stats['turret']}" if stats["turret"] else ""
-        widgets.safe_add(stdscr, py - 1, 2, f"LV{level} [{'█'*xfill}{'·'*(xw-xfill)}] BASE{base_lv}{turret_s} DMGx{stats['dmg_mult']:.1f}", P["magenta"])
-        # base visual naik level: armor ekstra + cannon kalau punya turret
+        widgets.safe_add(stdscr, py - 1, 2, f"LV{level} [{'█'*xfill}{'·'*(xw-xfill)}] BASE{base_lv}{turret_s} DMGx{stats['dmg_mult']:.1f}", P["magenta"], size)
+        # base visual levels up: extra armor + cannon with turret
         base_attr = P["green"] | (curses.A_BOLD if base_lv >= 5 else 0)
         for i, line in enumerate(PLAYER_ART):
-            widgets.safe_add(stdscr, py + i, cx - len(line) // 2, line, base_attr)
+            widgets.safe_add(stdscr, py + i, cx - len(line) // 2, line, base_attr, size)
         if stats["wall"] > 0:
             armor = "▣" * min(6, stats["wall"]) + f" Lv{stats['wall']}"
-            widgets.safe_add(stdscr, py + 4 if py + 4 < h else h - 1, cx - len(armor) // 2, armor, P["cyan"])
+            widgets.safe_add(stdscr, py + 4 if py + 4 < h else h - 1, cx - len(armor) // 2, armor, P["cyan"], size)
         if stats["turret"] > 0:
             blink = "⌖" if (now * 3) % 1 < 0.7 else "◉"
-            widgets.safe_add(stdscr, py - 1, cx + 12, f"{blink}x{stats['turret']}", P["magenta"])
-        # ── panel waifu operator (kanan, hanya layar lebar biar tidak sempit) ──
-        # Layout presisi: art berakhir di h-7, nama h-5, dialog h-4 — selalu muat.
+            widgets.safe_add(stdscr, py - 1, cx + 12, f"{blink}x{stats['turret']}", P["magenta"], size)
+        # ── operator panel (right, wide screens only so it never crams) ──
+        # Precise layout: art ends at h-7, name at h-5, dialog at h-4.
         photo_geom = None
         if w >= 102 and h >= 24:
             px = w - 36
@@ -684,7 +704,7 @@ def show(stdscr, P):
                 frows = min(18, max(6, (h - 24) // 2 + 8), h - 9)
                 fcols = min(34, max(12, frows * 2))
                 art_top = art_bot - frows + 1
-                widgets.safe_add(stdscr, art_top - 1, px, f"◆ {winfo['name']} · {winfo['title']} ♡{blv}", P["cyan"])
+                widgets.safe_add(stdscr, art_top - 1, px, f"◆ {winfo['name']} · {winfo['title']} ♡{blv}", P["cyan"], size)
                 if use_photo:
                     photo_geom = (art_top, px, fcols, frows)
                 else:
@@ -702,39 +722,44 @@ def show(stdscr, P):
                         art = waifu_art[: max(4, h - 14)]
                         atop = art_bot - len(art) + 1
                         for i, ln in enumerate(art):
-                            widgets.safe_add(stdscr, atop + i, px, ln, P["magenta"] if i < 5 else P["fg"])
+                            widgets.safe_add(stdscr, atop + i, px, ln, P["magenta"] if i < 5 else P["fg"], size)
             else:
                 photo_geom = None
                 art = waifu_art[: max(4, h - 14)]
                 art_top = art_bot - len(art) + 1
-                widgets.safe_add(stdscr, art_top - 1, px, f"◆ {winfo['name']} · {winfo['title']} ♡{blv}", P["cyan"])
+                widgets.safe_add(stdscr, art_top - 1, px, f"◆ {winfo['name']} · {winfo['title']} ♡{blv}", P["cyan"], size)
                 for i, ln in enumerate(art):
-                    widgets.safe_add(stdscr, art_top + i, px, ln, P["magenta"] if i < 5 else P["fg"])
+                    widgets.safe_add(stdscr, art_top + i, px, ln, P["magenta"] if i < 5 else P["fg"], size)
             mood_face = winfo["faces"].get(wmood, "(・‿・)")
-            widgets.safe_add(stdscr, h - 5, px, f"{winfo['name']} {mood_face}", P["yellow"] | curses.A_BOLD)
+            widgets.safe_add(stdscr, h - 5, px, f"{winfo['name']} {mood_face}", P["yellow"] | curses.A_BOLD, size)
             if wstory_t > 0:
                 say = wstory
             elif wmood == "idle":
-                say = story.line_for(waifu_id, "idle", seed=int(now / 4))
+                # idle lines rotate every 4s; cache so we format once per bucket
+                seed = int(now / 4)
+                if seed != idle_seed_cache:
+                    idle_seed_cache = seed
+                    idle_line_cache = story.line_for(waifu_id, "idle", seed=seed)
+                say = idle_line_cache
             else:
                 say = story.mood_line(waifu_id, wmood, wline)
-            widgets.safe_add(stdscr, h - 4, px, f"「{say}」", P["dim"])
-        # heartbeat murah: sudut layar kedip saat HP < 30% (4 addstr saja)
+            widgets.safe_add(stdscr, h - 4, px, f"「{say}」", P["dim"], size)
+        # cheap heartbeat: screen corners blink under 30% HP (4 addstrs)
         if player_hp < player_max * 0.3 and player_hp > 0:
             hb = P["red"] | curses.A_BOLD if (now * 3) % 1 < 0.5 else P["dim"]
-            widgets.safe_add(stdscr, 0, 0, "♥", hb)
-            widgets.safe_add(stdscr, 0, w - 1, "♥", hb)
-            widgets.safe_add(stdscr, h - 1, 0, "♥", hb)
-            widgets.safe_add(stdscr, h - 1, w - 1, "♥", hb)
+            widgets.safe_add(stdscr, 0, 0, "♥", hb, size)
+            widgets.safe_add(stdscr, 0, w - 1, "♥", hb, size)
+            widgets.safe_add(stdscr, h - 1, 0, "♥", hb, size)
+            widgets.safe_add(stdscr, h - 1, w - 1, "♥", hb, size)
 
         caret = "█" if (now * 4) % 1 < 0.6 else " "
         prompt = f"> {buf}{caret}"
-        widgets.safe_add(stdscr, h - 2, max(0, cx - max(len(prompt), len(target)) // 2 - 2), prompt, P["fg"])
+        widgets.safe_add(stdscr, h - 2, max(0, cx - max(len(prompt), len(target)) // 2 - 2), prompt, P["fg"], size)
         if msg_t > 0:
-            widgets.safe_add(stdscr, h - 3, 2, msg[: max(0, w - 4)], P["cyan"])
+            widgets.safe_add(stdscr, h - 3, 2, msg[: max(0, w - 4)], P["cyan"], size)
         else:
             live_wpm = (len(buf) / 5) / (elapsed_word / 60) if elapsed_word > 0.2 else 0
-            widgets.safe_add(stdscr, h - 3, 2, f"{elapsed_word:.1f}s | {live_wpm:.0f} WPM | {combo}x | Enter=tembak", P["dim"])
+            widgets.safe_add(stdscr, h - 3, 2, f"{elapsed_word:.1f}s | {live_wpm:.0f} WPM | {combo}x | Enter=shoot", P["dim"], size)
 
         stdscr.refresh()
         if photo_geom and photo_path and gfx_mode == "kitty":

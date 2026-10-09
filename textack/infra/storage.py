@@ -1,3 +1,5 @@
+import copy
+import json
 import os
 from pathlib import Path
 
@@ -25,19 +27,25 @@ def load_best(path=DEFAULT_BEST):
         return {"wave": 0, "wpm": 0.0}
 
 
+def beats_best(cur, wave, wpm):
+    """Pure check: does (wave, wpm) beat cur? Avoids a file read per hit."""
+    try:
+        return wave > cur["wave"] or (wave == cur["wave"] and wpm > cur["wpm"])
+    except (KeyError, TypeError):
+        return True
+
+
 def save_best(path, wave, wpm):
     try:
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
         cur = load_best(path)
-        if wave > cur["wave"] or (wave == cur["wave"] and wpm > cur["wpm"]):
+        if beats_best(cur, wave, wpm):
             path.write_text(f"{wave} {wpm:.1f}\n")
     except Exception:  # noqa: BLE001, S110
         pass
 
 
 def load_waifu(path=DEFAULT_WAIFU):
-    import copy
-    import json
     state = copy.deepcopy(WAIFU_DEFAULT_STATE)
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -57,7 +65,6 @@ def load_waifu(path=DEFAULT_WAIFU):
 
 
 def save_waifu(path, state):
-    import json
     try:
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
         safe = {"active": state.get("active", "aika"), "unlocked": list(state.get("unlocked", ["aika"])), "bond": {k: max(0.0, float(v)) for k, v in dict(state.get("bond", {})).items()}}

@@ -1,9 +1,11 @@
 # textack/ui/guard.py
-"""Terminal-size guard — layar kekecilan = overlay gelap + panduan zoom.
+"""Terminal-size guard — too-small screen = dark overlay + zoom guide.
 
-Main loop (opening, siege) panggil wait_until_fit() tiap frame.
-Game pause selama overlay tampil; q/ESC = keluar ke menu.
+Main loop (opening, siege) calls wait_until_fit() each frame.
+Game pauses while the overlay shows; q/ESC = back to menu.
 """
+import curses
+import time
 
 MIN_W = 80
 MIN_H = 24
@@ -14,10 +16,7 @@ def too_small(h, w, min_w=MIN_W, min_h=MIN_H):
 
 
 def wait_until_fit(stdscr, P, min_w=MIN_W, min_h=MIN_H):
-    """Overlay blocking. Return "quit" kalau user tekan q/ESC, else None."""
-    import curses
-    import time
-
+    """Blocking overlay. Returns "quit" if the user hits q/ESC, else None."""
     stdscr.nodelay(False)
     stdscr.timeout(250)
     while True:
@@ -27,12 +26,12 @@ def wait_until_fit(stdscr, P, min_w=MIN_W, min_h=MIN_H):
         stdscr.erase()
         cx = w // 2
         lines = [
-            "!! JENDELA TERLALU KECIL !!",
-            f"butuh >= {min_w}x{min_h}  kini {w}x{h}",
-            "gedein jendela, atau zoom out:",
-            "  Shift + -  (font kecil)",
-            "balikin zoom: Shift + +",
-            "q = keluar",
+            "!! WINDOW TOO SMALL !!",
+            f"need >= {min_w}x{min_h}  now {w}x{h}",
+            "enlarge the window, or zoom out:",
+            "  Shift + -  (smaller font)",
+            "restore zoom: Shift + +",
+            "q = quit",
         ]
         top = max(0, h // 2 - len(lines) // 2)
         for i, ln in enumerate(lines):
