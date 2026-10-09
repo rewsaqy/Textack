@@ -44,5 +44,12 @@ def hp_bar_str(cur, disp, total, width):
     fa = int(width * pa)
     fd = int(width * pd)
     # Build via multiplication, not per-char concatenation.
-    out = "#" * fa + "=" * max(0, fd - fa) + "-" * max(0, width - max(fa, fd))
+    out = "█" * fa + "▒" * max(0, fd - fa) + "░" * max(0, width - max(fa, fd))
     return f"[{out}] {int(cur)}/{total}"
+
+
+def px_bar(frac, width, fill="█", empty="░"):
+    """Chunky arcade pixel bar. frac clamped to 0..1."""
+    width = max(1, width)
+    f = int(width * max(0, min(1, frac)))
+    return fill * f + empty * (width - f)
