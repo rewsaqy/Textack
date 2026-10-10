@@ -1,0 +1,9 @@
+[package]
+name = "textack-sim"
+version = "1.0.0"
+edition = "2021"
+description = "Textack sim worker in Rust (protocol v1, stdio)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

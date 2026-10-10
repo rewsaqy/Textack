@@ -52,6 +52,20 @@ def test_validate_codes():
                             "boss": 1})[1] == "bad-message"
 
 
+def test_int_and_seed_ranges():
+    wave = {"v": 1, "t": "wave", "id": 1, "wave": 3}
+    assert proto.validate(wave) == (True, "")
+    big = dict(wave)
+    big["wave"] = 2 ** 63
+    assert proto.validate(big)[1] == "bad-message"
+    neg = {"v": 1, "t": "roll", "id": 1, "owned": {}, "seed": -1}
+    assert proto.validate(neg)[1] == "bad-message"
+    huge = {"v": 1, "t": "roll", "id": 1, "owned": {}, "seed": 2 ** 64}
+    assert proto.validate(huge)[1] == "bad-message"
+    ok_seed = {"v": 1, "t": "roll", "id": 1, "owned": {}, "seed": 2 ** 64 - 1}
+    assert proto.validate(ok_seed) == (True, "")
+
+
 def test_err_helper():
     assert proto.err("boom") == {"v": 1, "t": "error", "code": "boom"}
     e = proto.err("bad-message", "nope", 7)

@@ -49,6 +49,9 @@ another screen's internals) fail review even if tests pass.
 | `textack/engine/proto.py` | engine | wire spec v1 | `VERSION`, `SPEC`, `encode/decode/validate`, `err()` |
 | `textack/engine/sim.py` | engine | reference worker | `Sim.handle(msg)` (mirrors `core/*`) |
 | `textack/engine/transport.py` | engine | framing | `MessageIO` (streams), `Loopback` (in-process) |
+| `textack/engine/sfx_worker.py` | engine | live sound worker | `SfxWorker` + `python -m` stdio entry |
+| `textack/engine/sfx_client.py` | engine | director side | `SfxClient` (spawn, notify, id-matched requests) |
+| `rs/textack-sim/` | engine (rust) | sim worker port | stdio binary, bit-identical replies (see its README) |
 | `textack/ui/palette.py` | ui | color pairs | `init()` |
 | `textack/ui/widgets.py` | ui | bars, panels, input | `hp_bar_str(...)`, `safe_add(...)` |
 | `textack/ui/fx.py` | ui | transitions | `fade_out(...)`, `fade_in_blank(...)` |

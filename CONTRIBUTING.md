@@ -79,7 +79,7 @@ imperative mood, ≤72-char subject:
 Types: `feat` (new feature), `fix` (bug fix), `perf` (performance),
 `refactor` (no behavior change), `docs`, `test`, `chore`, `ci`.
 
-Scopes: `core`, `ui`, `infra`, `engine`, or a file area (`siege`, `opening`, `sfx`, `proto`, `sim`).
+Scopes: `core`, `ui`, `infra`, `engine`, `rs`, `lua`, or a file area (`siege`, `opening`, `sfx`, `proto`, `sim`).
 
 Good:
 

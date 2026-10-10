@@ -8,6 +8,8 @@ Full catalog: docs/PROTOCOL.md. Rules enforced here:
 - unknown fields are ignored (forward compatibility)
 - unknown types and schema violations never raise: the worker answers
   {"t": "error", ...} instead (see err())
+- integers must fit i64, seeds must fit u64 non-negative (every worker
+  language parses JSON ints as i64/u64; unbounded ints would diverge)
 - numbers must be finite (NaN/Infinity are rejected: most JSON
   implementations in other languages refuse them)
 - bool is NOT int (JSON true/false must not validate as 1/0)
@@ -16,16 +18,19 @@ import json
 import math
 
 VERSION = 1
+I64_MIN = -(2 ** 63)
+I64_MAX = 2 ** 63 - 1
+U64_MAX = 2 ** 64 - 1
 
 # type -> (required {field: kind}, optional {field: kind})
-# kinds: str | int | num | bool | dict | list | any
+# kinds: str | int | seed | num | bool | dict | list | any
 SPEC = {
     "hello": ({"role": "str", "proto": "list"}, {}),
     "ready": ({"role": "str", "proto": "num"}, {}),
     "ping": ({}, {"id": "any"}),
     "pong": ({}, {"id": "any"}),
     "hit": ({"id": "any", "target": "str", "buf": "str", "elapsed": "num",
-             "combo": "int", "stats": "dict", "wave": "int"}, {"seed": "int"}),
+             "combo": "int", "stats": "dict", "wave": "int"}, {"seed": "seed"}),
     "damage": ({"id": "any", "dmg": "int", "tag": "str", "wpm": "num",
                 "speed_bonus": "int", "perfect": "bool", "crit": "bool",
                 "double": "bool"}, {}),
@@ -48,15 +53,20 @@ SPEC = {
     "rank": ({"id": "any", "wpm": "num", "combo": "int"}, {}),
     "rank-is": ({"id": "any", "rank": "str"}, {}),
     "dialog": ({"id": "any", "wid": "str", "trigger": "str"},
-               {"wave": "int", "enemy": "str", "seed": "int"}),
-    "mood": ({"id": "any", "wid": "str", "mood": "str"}, {"seed": "int"}),
+               {"wave": "int", "enemy": "str", "seed": "seed"}),
+    "mood": ({"id": "any", "wid": "str", "mood": "str"}, {"seed": "seed"}),
     "line": ({"id": "any", "text": "str"}, {}),
     "upgrade": ({"id": "any", "uid": "str", "stats": "dict"}, {}),
     "stats": ({"id": "any", "stats": "dict"}, {}),
-    "roll": ({"id": "any", "owned": "dict"}, {"k": "int", "seed": "int"}),
+    "roll": ({"id": "any", "owned": "dict"}, {"k": "int", "seed": "seed"}),
     "choices": ({"id": "any", "ids": "list"}, {}),
     "unlocks": ({"id": "any", "unlocked": "list", "wave": "int"}, {}),
     "unlocks-is": ({"id": "any", "ids": "list"}, {}),
+    "sfx-trigger": ({"name": "str"}, {"id": "any"}),
+    "sfx-played": ({"name": "str", "played": "bool", "backend": "str"},
+                   {"id": "any"}),
+    "sfx-set": ({"on": "bool"}, {"id": "any"}),
+    "sfx-state": ({"on": "bool"}, {"id": "any"}),
     "bye": ({}, {}),
     "error": ({"code": "str"}, {"msg": "str", "id": "any"}),
 }
@@ -70,7 +80,9 @@ def _is(v, kind):
     if kind == "bool":
         return isinstance(v, bool)
     if kind == "int":
-        return type(v) is int
+        return type(v) is int and I64_MIN <= v <= I64_MAX
+    if kind == "seed":
+        return type(v) is int and 0 <= v <= U64_MAX
     if kind == "num":
         return type(v) is int or (type(v) is float and math.isfinite(v))
     if kind == "dict":

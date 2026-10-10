@@ -10,9 +10,18 @@ an in-process reference (`textack/engine/`); no game flow uses it yet.
 - Works over anything byte-streamed: socket pairs, pipes, subprocess
   stdio (`textack.engine.transport.MessageIO`).
 - A reader buffers until `\n`; a writer flushes every message.
+- Blank lines are skipped. Unparseable lines carry no envelope, so they
+  produce no reply (the `error` type is only for parsed objects).
 - EOF (empty read) = peer gone → raise/return, never hang silently.
 - Future supervisor may add length-prefixing; v1 stays human-readable
   (`nc`, `tee`, and `jq` must work for debugging).
+
+## Notifications (no id → no reply)
+
+Any request type whose SPEC marks `id` optional MAY be sent without one.
+Workers MUST NOT reply to id-less requests — except `hello`/`ping`/`bye`,
+which always answer. This lets fire-and-forget clients (the game loop
+triggering sounds at 60fps) never fill the pipe with unread replies.
 
 ## Envelope
 
@@ -39,7 +48,11 @@ Error codes: `bad-envelope` (not an object) · `bad-version` ·
 
 ## Value rules (cross-language hazards)
 
-- `int` means int — JSON `true`/`false` must **not** validate as int.
+- `int` means i64-range int — JSON `true`/`false` must **not** validate
+  as int, and values outside `[-2^63, 2^63-1]` are rejected (every worker
+  language parses JSON ints as i64).
+- `seed` means non-negative int in `[0, 2^64-1]` (u64; see Deterministic
+  RNG below). Negative or huge seeds are `bad-message` everywhere.
 - `num` means finite int/float — `NaN`/`Infinity` are rejected on
   encode, decode, and validate (most strictly-typed JSON parsers
   refuse them, so the wire must never contain them).
@@ -70,12 +83,43 @@ Request → reply. `id` required on every request below except
 | `unlocks` | `unlocked[]`, `wave` | `unlocks-is` (`ids[]`) | Mirrors `check_unlocks` |
 | `bye` | — | `bye` | Clean shutdown |
 
+## Catalog (v1, sfx domain — added phase 2, purely additive)
+
+The worker owns backend detection, rate limiting, and the on/off
+switch. Fail-silent like the classic path: `played=false` instead of
+errors. `backend` names the emission path (`paplay`, `mpv`, `powershell`,
+`beep`, `none`, `muted`).
+
+| Request | Key fields | Reply | Notes |
+|---|---|---|---|
+| `sfx-trigger` | `name`, `id?` | `sfx-played` (`name`, `played`, `backend`) | No `id` → notify, no reply |
+| `sfx-set` | `on`, `id?` | `sfx-state` (`on`) | No `id` → notify, no reply |
+
 ## Determinism
 
 Any request carrying `seed` must be **byte-deterministic**: same bytes
 in → same bytes out, in every language, forever. Seeded vectors are
 the conformance gate. Unseeded requests (live `rng`) assert shape
 only, never exact values.
+
+Seeded randomness replicates CPython's `random` bit-exact
+(`rs/textack-sim/src/mt.rs` is the executable spec):
+
+- Algorithm: MT19937 (Mersenne Twister), 32-bit, standard tempering.
+- Seeding: key = minimal little-endian 32-bit words of the seed
+  (`7 → [7]`, `2^32 → [0, 1]`, `0 → [0]`), fed through the reference
+  `init_by_array` after `init_genrand(19650218)`.
+- `random()`: `(gen() >> 5) * 2^26 + (gen() >> 6)`, all over `2^53`.
+- `getrandbits(k)`: top k bits of concatenated 32-bit outputs.
+- `randbelow(n)`: rejection loop on `getrandbits(bit_length(n))`.
+  NB: `n.bit_length()`, not `n - 1` — powers of two need full width.
+- `shuffle`: Fisher-Yates descending with `randbelow(i + 1)`.
+- `choice(list)`: index via `randbelow(len)` (not `floor(random()*n)`).
+
+Floats must also match bit-exactly: keep the operation order of
+`core/*` (mixed int/float expressions evaluate left to right, `int()`
+truncates toward zero), and emit floats in shortest-roundtrip form
+(Python `repr`, Rust `serde_json`, Lua `%.17g` — all agree).
 
 ## Conformance (how to add a language)
 
@@ -94,8 +138,11 @@ overloading v1 fields.
 
 ## Phase map
 
-1. ✅ **Phase 1 (this doc)**: spec + in-process reference + vectors.
-2. SFX worker (first audible payoff).
-3. Sim core port (Rust) against these vectors.
+1. ✅ **Phase 1**: spec + in-process reference + vectors.
+2. ✅ **Phase 2**: sfx domain + first live worker
+   (`sfx_worker.py`, `sfx_client.py`, `tests/test_engine_sfx.py`).
+3. ✅ **Phase 3**: Rust sim (`rs/textack-sim`) — full sim domain port,
+   MT19937 bit-exact vs CPython, proven by `cargo test` + the live
+   battery in `tests/test_rust_sim.py` (~1000 seeded replies equal).
 4. Content scripts (Lua) + hot-reload.
 5. Supervisor + `engine.yaml` + `--engine=polyglot` flag.
