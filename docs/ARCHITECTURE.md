@@ -26,6 +26,9 @@ middle, side effects at the edge.
 
 - `core` imports stdlib only (`random`, `dataclasses`, `typing`).
   No curses, no files, no sound. Fully unit-testable.
+- `engine` (polyglot v2, phase 1: protocol + reference only, game still
+  runs classic) imports `core` + stdlib only. Speaks `docs/PROTOCOL.md`.
+  Never imports `ui`/`infra`.
 - `ui` may import `core` and `infra`. Owns all `curses` calls.
 - `infra` may import `core` (types/constants only).
 - Nothing imports `ui/screens/*` except the entry shim
@@ -43,6 +46,9 @@ another screen's internals) fail review even if tests pass.
 | `textack/core/enemies.py` | core | enemy stats per wave | `EnemyConfig(name,interval,dmg,burst,hp,proj,col)`, `for_wave(wave)` |
 | `textack/core/upgrades.py` | core | 14 upgrades | `Upgrade(id,icon,cat,name,desc,max,apply_fn)`, `REGISTRY`, `apply(uid,stats)`, `roll_choices(owned,k,rng)`, `fresh_stats()` |
 | `textack/core/progression.py` | core | rank + XP | `rank_for(wpm,combo)`, `next_threshold(current)`, `gain_xp(...)` |
+| `textack/engine/proto.py` | engine | wire spec v1 | `VERSION`, `SPEC`, `encode/decode/validate`, `err()` |
+| `textack/engine/sim.py` | engine | reference worker | `Sim.handle(msg)` (mirrors `core/*`) |
+| `textack/engine/transport.py` | engine | framing | `MessageIO` (streams), `Loopback` (in-process) |
 | `textack/ui/palette.py` | ui | color pairs | `init()` |
 | `textack/ui/widgets.py` | ui | bars, panels, input | `hp_bar_str(...)`, `safe_add(...)` |
 | `textack/ui/fx.py` | ui | transitions | `fade_out(...)`, `fade_in_blank(...)` |
