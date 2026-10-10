@@ -20,6 +20,8 @@ class Sim:
     def handle(self, msg):
         if not isinstance(msg, dict):
             return proto.err("bad-envelope", "message must be an object")
+        # JSON null ≡ absent (matches every other worker language).
+        msg = {k: v for k, v in msg.items() if v is not None}
         ok, code = proto.validate(msg)
         if not ok:
             mid = msg.get("id") if code in ("bad-message", "unknown-type") else None
@@ -46,7 +48,10 @@ class Sim:
         return rep
 
     def _on_bye(self, msg):
-        return {"v": 1, "t": "bye"}
+        rep = {"v": 1, "t": "bye"}
+        if msg.get("id") is not None:
+            rep["id"] = msg["id"]
+        return rep
 
     def _on_hit(self, msg):
         r = combat.resolve_hit(msg["target"], msg["buf"], msg["elapsed"],
@@ -109,7 +114,7 @@ class Sim:
 
     def _on_roll(self, msg):
         rng = random.Random(msg["seed"]) if "seed" in msg else random
-        picks = upgrades.roll_choices(dict(msg["owned"]), msg.get("k") or 3,
+        picks = upgrades.roll_choices(dict(msg["owned"]), msg.get("k", 3),
                                       rng)
         return {"v": 1, "t": "choices", "id": msg["id"],
                 "ids": [u.id for u in picks]}

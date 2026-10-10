@@ -63,6 +63,13 @@ def test_sfx_replies_validate(tmp_path):
         assert (ok, code) == (True, ""), (rep, code)
 
 
+def test_close_reports_clean(tmp_path):
+    cli = SfxClient(base_dir=str(tmp_path))
+    assert cli.ping()
+    assert cli.close() is True
+    assert not cli.alive
+
+
 def test_live_worker_subprocess(tmp_path):
     with SfxClient(base_dir=str(tmp_path)) as cli:
         assert cli.alive and cli.ping()

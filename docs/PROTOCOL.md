@@ -69,6 +69,7 @@ Request → reply. `id` required on every request below except
 |---|---|---|---|
 | `hello` | `role`, `proto: [1]`, `id?` | `ready` (`role`, `proto: 1`) | Handshake; id echoed when present |
 | `ping` | — | `pong` | Liveness probe |
+| `bye` | `id?` | `bye` | Clean shutdown; id echoed when present |
 | `hit` | `target`, `buf`, `elapsed`, `combo`, `stats{}`, `wave`, `seed?` | `damage` (`dmg`, `tag`, `wpm`, `speed_bonus`, `perfect`, `crit`, `double`) or `nomatch` | Mirrors `core.combat.resolve_hit` |
 | `combo` | `hit`, `combo`, `guard?`, `rng?` | `combo-state` (`combo`) | Mirrors `combo_step` |
 | `counter` | `enemy_dmg`, `wave`, `bonus?` | `counter-damage` (`dmg`) | Mirrors `miss_damage` |
@@ -82,7 +83,6 @@ Request → reply. `id` required on every request below except
 | `roll` | `owned{}`, `k?` (=3), `seed?` | `choices` (`ids[]`) | Mirrors `roll_choices` |
 | `pick` | `wave`, `seed?` | `word` (`text`) | Mirrors `words.pick_word` (content-owned) |
 | `unlocks` | `unlocked[]`, `wave` | `unlocks-is` (`ids[]`) | Mirrors `check_unlocks` |
-| `bye` | — | `bye` | Clean shutdown |
 
 ## Catalog (v1, content domain — added phase 4, purely additive)
 

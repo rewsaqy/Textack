@@ -71,7 +71,7 @@ SPEC = {
                    {"id": "any"}),
     "sfx-set": ({"on": "bool"}, {"id": "any"}),
     "sfx-state": ({"on": "bool"}, {"id": "any"}),
-    "bye": ({}, {}),
+    "bye": ({}, {"id": "any"}),
     "error": ({"code": "str"}, {"msg": "str", "id": "any"}),
 }
 

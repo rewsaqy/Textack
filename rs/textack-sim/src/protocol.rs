@@ -184,7 +184,15 @@ pub fn handle(v: &Value, live: &mut Mt) -> Value {
             }
             Value::Object(m)
         }
-        "bye" => serde_json::json!({"v": 1, "t": "bye"}),
+        "bye" => {
+            let mut m = Map::new();
+            m.insert("v".to_string(), Value::from(1));
+            m.insert("t".to_string(), Value::from("bye"));
+            if let Some(i) = id_of(o) {
+                m.insert("id".to_string(), i);
+            }
+            Value::Object(m)
+        }
         "hit" => {
             let id = match req_id(o) {
                 Some(i) => i,

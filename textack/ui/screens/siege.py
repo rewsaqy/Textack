@@ -369,6 +369,8 @@ def show(stdscr, P):
                     ver, errs = D.content_reload()
                     if errs:
                         msg = f"Reload kept v{ver}: {str(errs[0])[:44]}"
+                    elif ver == 0:
+                        msg = "Builtin content: already live (no worker)"
                     else:
                         msg = f"Content v{ver} reloaded live"
                 else:

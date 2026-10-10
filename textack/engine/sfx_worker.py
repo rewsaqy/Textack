@@ -26,6 +26,8 @@ class SfxWorker:
     def handle(self, msg):
         if not isinstance(msg, dict):
             return proto.err("bad-envelope", "message must be an object")
+        # JSON null ≡ absent (matches every other worker language).
+        msg = {k: v for k, v in msg.items() if v is not None}
         ok, code = proto.validate(msg)
         if not ok:
             mid = msg.get("id") if code in ("bad-message", "unknown-type") else None
@@ -52,7 +54,10 @@ class SfxWorker:
         return rep
 
     def _on_bye(self, msg):
-        return {"v": 1, "t": "bye"}
+        rep = {"v": 1, "t": "bye"}
+        if msg.get("id") is not None:
+            rep["id"] = msg["id"]
+        return rep
 
     def _on_sfx_trigger(self, msg):
         played = bool(sfx_mod.play(None, self.sfx, msg["name"]))

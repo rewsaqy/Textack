@@ -25,9 +25,15 @@ def test_handshake():
         "v": 1, "t": "ready", "role": "sim", "proto": 1}
     assert call("hello", role="director", proto=[1], mid=8) == {
         "v": 1, "t": "ready", "role": "sim", "proto": 1, "id": 8}
+    assert SIM.handle({"v": 1, "t": "bye", "id": 9}) == {
+        "v": 1, "t": "bye", "id": 9}
+    assert SIM.handle({"v": 1, "t": "ping", "id": None}) == {
+        "v": 1, "t": "pong"}
+    assert call("bye", mid=11) == {"v": 1, "t": "bye", "id": 11}
+    assert SIM.handle({"v": 1, "t": "bye"}) == {"v": 1, "t": "bye"}
     assert call("ping", mid=4) == {"v": 1, "t": "pong", "id": 4}
     assert SIM.handle({"v": 1, "t": "ping"}) == {"v": 1, "t": "pong"}
-    assert call("bye") == {"v": 1, "t": "bye"}
+    assert call("bye") == {"v": 1, "t": "bye", "id": 1}
 
 
 def test_hit_matches_core():

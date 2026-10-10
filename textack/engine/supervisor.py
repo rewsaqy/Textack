@@ -57,7 +57,10 @@ class Supervisor:
         for cmd in cands:
             if not cmd:
                 continue
-            head = cmd[0].format(python=sys.executable)
+            try:
+                head = cmd[0].format(python=sys.executable)
+            except (KeyError, IndexError, ValueError):
+                continue
             if "/" in head or "\\" in head:
                 if (root / head).exists():
                     return [head] + cmd[1:]
@@ -82,7 +85,7 @@ class Supervisor:
                     self._fallback(d, f"{name} binary not found")
             return
         try:
-            if domains == ["sfx"]:
+            if "sfx" in domains:
                 client = SfxClient(cmd=cmd)
             else:
                 client = PipeClient(cmd, cwd=str(repo_root()))

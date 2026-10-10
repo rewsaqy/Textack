@@ -163,7 +163,12 @@ handlers.ping = function(m)
   return r
 end
 
-handlers.bye = function(m) return { v = 1, t = "bye" } end
+handlers.bye = function(m)
+  local r = { v = 1, t = "bye" }
+  local id = echo_id(m)
+  if id ~= nil then r.id = id end
+  return r
+end
 
 handlers.dialog = function(m)
   local id, e = need_id(m, "dialog")
