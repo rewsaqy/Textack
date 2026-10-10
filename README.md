@@ -111,7 +111,8 @@ TEXTACK_SFX=off textack      # start muted
 - Layered visuals: real photo (Ghostty/WezTerm/kitty, check
   `textack --gfx-test`) → colored face → ASCII.
 - Sound: `sfx/*.wav` via paplay/aplay/mpv (beep fallback, F3 on/off).
-- `:q` to quit. `F2` cycles quality, `F3` toggles sound.
+- `:q` to quit. `F2` cycles quality, `F3` toggles sound, `F4` swaps
+  enemy sprites (pixel blocks / classic ASCII, also `--enemy=`).
 
 ## Engine modes
 

@@ -46,6 +46,7 @@ another screen's internals) fail review even if tests pass.
 | `textack/core/enemies.py` | core | enemy stats per wave | `EnemyConfig(name,interval,dmg,burst,hp,proj,col)`, `for_wave(wave)` |
 | `textack/core/upgrades.py` | core | 14 upgrades | `Upgrade(id,icon,cat,name,desc,max,apply_fn)`, `REGISTRY`, `apply(uid,stats)`, `roll_choices(owned,k,rng)`, `fresh_stats()` |
 | `textack/core/progression.py` | core | rank + XP | `rank_for(wpm,combo)`, `next_threshold(current)`, `gain_xp(...)` |
+| `textack/core/campaign.py` | core | story-mode seam | `CHAPTERS`, `chapter_for`, `stage_at`, `chapter_progress` |
 | `textack/engine/proto.py` | engine | wire spec v1 | `VERSION`, `SPEC`, `encode/decode/validate`, `err()` |
 | `textack/engine/sim.py` | engine | reference worker | `Sim.handle(msg)` (mirrors `core/*`) |
 | `textack/engine/transport.py` | engine | framing | `MessageIO` (streams), `Loopback` (in-process) |

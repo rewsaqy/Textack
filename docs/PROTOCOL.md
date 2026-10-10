@@ -154,10 +154,10 @@ notation. Known Lua limits (documented, tested): integers must satisfy
 3. Talk to the reference over a real socket pair
    (`transport.MessageIO` ↔ your implementation) before claiming done.
 
-Reserved for later versions: `sfx` domain (`trigger`, `mix`, `mute`),
-content domain (`wave-script`, `reload`), supervisor domain
-(`spawn`, `health`, `restart`). Propose them as v2, never by
-overloading v1 fields.
+Reserved for later versions: story domain (`story-stage`,
+`story-advance`, `story-choice` — see `docs/STORY_MODE.md`) and
+supervisor domain (`spawn`, `health`, `restart`). Propose them as
+additive types, never by overloading v1 fields.
 
 ## Phase map
 

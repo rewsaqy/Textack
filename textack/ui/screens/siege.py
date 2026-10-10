@@ -14,6 +14,7 @@ import sys
 import time
 
 from textack import VERSION
+from textack.core import campaign as campaign_mod
 from textack.core import combat, enemies, progression, story, upgrades, words
 from textack.engine import mode as engine_mode
 from textack.infra import quality, storage, waifu
@@ -23,7 +24,7 @@ from textack.ui import gfx, guard, widgets
 from textack.ui.screens import upgrade as upgrade_screen
 from textack.ui.widgets import get_field
 
-ENEMY_ART_A = [
+ENEMY_PIXEL_A = [
     r"  █ █ █ █ █ █ █ █  ",
     r"  █████████████████  ",
     r"  ██▒▒▒██░██▒▒▒██  ",
@@ -32,7 +33,7 @@ ENEMY_ART_A = [
     r"  ██████▓▓▓██████  ",
     r"  █████████████████  ",
 ]
-ENEMY_ART_B = [
+ENEMY_PIXEL_B = [
     r"  █ █ █ █ █ █ █ █  ",
     r"  █████████████████  ",
     r"  ██▓▓▓██░██▓▓▓██  ",
@@ -40,6 +41,25 @@ ENEMY_ART_B = [
     r"  ██████▒▒▒██████  ",
     r"  ██████▒▒▒██████  ",
     r"  █████████████████  ",
+]
+# Original line-art sprites (pre-pixel): F4 / --enemy=classic restores them.
+ENEMY_CLASSIC_A = [
+    r"    _._._._._._._._    ",
+    r"    |             |    ",
+    r"    |  [ ] _ [ ] |    ",
+    r" ___|   |___|   |___ ",
+    r"|___|___|   |___|___|",
+    r"|___|___|___|___|___|",
+    r"|_|_|_|_|_|_|_|_|_|_|",
+]
+ENEMY_CLASSIC_B = [
+    r"    _*_*_*_*_*_*_    ",
+    r"    |             |    ",
+    r"    |  [#] _ [#] |    ",
+    r" ___|   |___|   |___ ",
+    r"|___|___|   |___|___|",
+    r"|___|___|___|___|___|",
+    r"|_|_|_|_|_|_|_|_|_|_|",
 ]
 PLAYER_ART = [
     r"     ███████████     ",
@@ -57,6 +77,25 @@ PX_DIGITS = {
     4: ["█ █", "█ █", "███", "  █", "  █"],
     5: ["███", "█  ", "███", "  █", "███"],
 }
+
+
+def enemy_style(argv=None, env=None):
+    """Enemy sprite style: pixel blocks (default) or classic ASCII.
+
+    Flag:  textack --enemy=classic  (also: --enemy classic)
+    Env:   TEXTACK_ENEMY=classic
+    F4 cycles live in game. Anything but "classic" means pixel.
+    """
+    args = list(argv or [])
+    want = None
+    for i, a in enumerate(args):
+        if a.startswith("--enemy="):
+            want = a.split("=", 1)[1].strip().lower()
+        elif a == "--enemy" and i + 1 < len(args):
+            want = args[i + 1].strip().lower()
+    if want is None and env is not None:
+        want = (env.get("TEXTACK_ENEMY") or "").strip().lower() or None
+    return "classic" if want == "classic" else "pixel"
 
 
 def show(stdscr, P):
@@ -240,6 +279,7 @@ def show(stdscr, P):
     recoil_t = 0.0
     kick_y = 0.0
     grace_t = 0.0
+    estyle = enemy_style(sys.argv[1:], os.environ)
     last = time.monotonic()
 
     def set_quality(nqi):
@@ -267,7 +307,7 @@ def show(stdscr, P):
         word_start = time.monotonic()
         enemy_timer = 0.0
         cur_interval = quality.effective_interval(ecfg.interval, stats["slow"])
-        banner = f"WAVE {w} — {ecfg.name}"
+        banner = f"WAVE {w} — {ecfg.name} · {campaign_mod.chapter_for(w)['name']}"
         banner_t = 1.6
         grace_t = 1.2  # cinematic breather: enemy holds fire, banner shows
         trig = "boss" if w % 5 == 0 else "wave"
@@ -363,6 +403,10 @@ def show(stdscr, P):
                 if D is not None:
                     D.sfx_set(sfx["on"])
                 msg = f"Sound: {'ON' if sfx['on'] else 'OFF'} (F3 changes)"
+                msg_t = 2.0
+            elif key == curses.KEY_F4:
+                estyle = "classic" if estyle == "pixel" else "pixel"
+                msg = f"Enemy sprites: {estyle.upper()} (F4 changes)"
                 msg_t = 2.0
             elif key == curses.KEY_F5:
                 if D is not None:
@@ -636,6 +680,9 @@ def show(stdscr, P):
                 set_story(r_line(waifu_id, "clear", {"wave": wave, "enemy": ecfg.name}, random.randrange(999)), 3.0)
             save_waifu_state()
             t0 = time.monotonic()
+            skipped = False
+            stdscr.nodelay(True)
+            stdscr.timeout(33)
             while time.monotonic() - t0 < 1.8:
                 h2, w2 = stdscr.getmaxyx()
                 size2 = (h2, w2)
@@ -657,10 +704,14 @@ def show(stdscr, P):
                 widgets.safe_add(stdscr, _by + 1, _bx, "┃" + _l2.center(_bw - 2) + "┃", P["cyan"], size2)
                 widgets.safe_add(stdscr, _by + 2, _bx, "┗" + "━" * (_bw - 2) + "┛", P["yellow"], size2)
                 stdscr.refresh()
+                if stdscr.getch() != -1:
+                    skipped = True
+                    break
                 time.sleep(0.033)
-            stdscr.nodelay(False)
-            stdscr.timeout(-1)
-            stdscr.getch()
+            if not skipped:
+                stdscr.nodelay(False)
+                stdscr.timeout(-1)
+                stdscr.getch()
             stdscr.nodelay(True)
             stdscr.timeout(frame_ms)
             wave += 1
@@ -795,18 +846,25 @@ def show(stdscr, P):
         cw = min(16, w - 10)
         cfill = int(cw * min(1, combo / 10))
         sfx_s = "♪" if sfx["on"] else "×"
-        widgets.safe_add(stdscr, 0, max(0, w - cw - 28), f"[{'█'*cfill}{'░'*(cw-cfill)}] {quality.QLEVELS[qi]['name']} {sfx_s}", P["magenta"], size)
+        widgets.safe_add(stdscr, 0, max(0, w - cw - 28), f"[{'█'*cfill}{'░'*(cw-cfill)}] {quality.QLEVELS[qi]['name']} {sfx_s} {fps_show:.0f}fps", P["magenta"], size)
 
         bob = int((now * 2) % 2)
         ey = 6 + shy + bob
-        # fortress animation: windows/torches flicker between two frames
-        art_lines = ENEMY_ART_B if (now * 2.5) % 1 < 0.5 else ENEMY_ART_A
+        # fortress animation: two flicker frames in the active style
+        # (pixel blocks or classic ASCII, F4 switches live)
+        if estyle == "classic":
+            frame_a, frame_b = ENEMY_CLASSIC_A, ENEMY_CLASSIC_B
+        else:
+            frame_a, frame_b = ENEMY_PIXEL_A, ENEMY_PIXEL_B
+        art_lines = frame_b if (now * 2.5) % 1 < 0.5 else frame_a
         # cheap telegraph: enemy flashes bold when about to attack (>80% timer)
         tele = (enemy_timer / cur_interval) > 0.8 if cur_interval > 0 else False
         ecol = P[ecfg.col] | (curses.A_BOLD if tele else 0)
+        use_glow = qi < 2  # LOW skips the shadow pass (~14 addstrs/frame)
         for i, line in enumerate(art_lines):
             _ex = cx - len(line) // 2 + shx
-            widgets.safe_add(stdscr, ey + i, _ex + 1, line, curses.A_DIM, size)
+            if use_glow:
+                widgets.safe_add(stdscr, ey + i, _ex + 1, line, curses.A_DIM, size)
             widgets.safe_add(stdscr, ey + i, _ex, line, ecol, size)
         # enemy name + interval (transparent tactics)
         widgets.safe_add(stdscr, ey + len(art_lines) + 1, cx - 14 + shx, f"{ecfg.name} HP{int(max(0,enemy_hp))} ATK/{cur_interval:.1f}s", ecol, size)
