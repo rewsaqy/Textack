@@ -165,7 +165,15 @@ pub fn handle(v: &Value, live: &mut Mt) -> Value {
             if field(o, "role").and_then(as_str).is_none() || field(o, "proto").and_then(as_list).is_none() {
                 return err("bad-message", "hello needs role+proto", id_of(o));
             }
-            serde_json::json!({"v": 1, "t": "ready", "role": "sim-rs", "proto": 1})
+            let mut m = Map::new();
+            m.insert("v".to_string(), Value::from(1));
+            m.insert("t".to_string(), Value::from("ready"));
+            m.insert("role".to_string(), Value::from("sim-rs"));
+            m.insert("proto".to_string(), Value::from(1));
+            if let Some(i) = id_of(o) {
+                m.insert("id".to_string(), i);
+            }
+            Value::Object(m)
         }
         "ping" => {
             let mut m = Map::new();

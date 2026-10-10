@@ -33,7 +33,17 @@ class Loopback:
     def __init__(self, worker):
         self.worker = worker
 
-    def call(self, msg):
+    def call(self, msg, timeout=None):
         req = proto.decode(proto.encode(msg))
         rep = self.worker.handle(req)
         return proto.decode(proto.encode(rep))
+
+    def notify(self, msg):
+        self.worker.handle(proto.decode(proto.encode(msg)))
+
+    def close(self, timeout=None):
+        return True
+
+    @property
+    def alive(self):
+        return True

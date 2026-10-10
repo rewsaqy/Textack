@@ -67,7 +67,7 @@ Request → reply. `id` required on every request below except
 
 | Request | Key fields | Reply | Notes |
 |---|---|---|---|
-| `hello` | `role`, `proto: [1]` | `ready` (`role`, `proto: 1`) | Handshake |
+| `hello` | `role`, `proto: [1]`, `id?` | `ready` (`role`, `proto: 1`) | Handshake; id echoed when present |
 | `ping` | — | `pong` | Liveness probe |
 | `hit` | `target`, `buf`, `elapsed`, `combo`, `stats{}`, `wave`, `seed?` | `damage` (`dmg`, `tag`, `wpm`, `speed_bonus`, `perfect`, `crit`, `double`) or `nomatch` | Mirrors `core.combat.resolve_hit` |
 | `combo` | `hit`, `combo`, `guard?`, `rng?` | `combo-state` (`combo`) | Mirrors `combo_step` |
@@ -171,5 +171,34 @@ overloading v1 fields.
    dialog/waves/words/pick + hot-reload via `content-reload`, proven on
    lua5.4 AND luajit by `tests/test_lua_content.py` (waves 1..30 float-
    exact, every dialog line, reload session with broken files).
-4. Content scripts (Lua) + hot-reload.
-5. Supervisor + `engine.yaml` + `--engine=polyglot` flag.
+5. ✅ **Phase 5**: supervisor + director + `--engine` flag. `engine.json`
+   declares the fleet; missing binaries degrade per-domain to
+   builtin/classic; siege routes every call site through the director
+   (identical answers, proven by `tests/test_director.py`).
+
+## Fleet config (engine.json)
+
+```json
+{"components": [
+  {"name": "sim-rs",
+   "cmd": ["rs/textack-sim/target/debug/textack-sim"],
+   "alts": [["rs/textack-sim/target/release/textack-sim"]],
+   "domains": ["sim"], "fallback": "builtin"},
+  {"name": "content-lua",
+   "cmd": ["lua5.4", "lua/worker.lua"],
+   "alts": [["luajit", "lua/worker.lua"]],
+   "domains": ["content"], "fallback": "builtin"},
+  {"name": "sfx-py",
+   "cmd": ["{python}", "-m", "textack.engine.sfx_worker"],
+   "domains": ["sfx"], "fallback": "classic"}]}
+```
+
+- `cmd`/`alts`: tried in order. `{python}` expands to the running
+  interpreter; a head containing `/` must exist under the repo root,
+  otherwise it is looked up on `PATH`.
+- `domains`: `sim` = hit/combo/counter/xp/threshold/rank/upgrade/roll,
+  `content` = dialog/mood/wave/unlocks/pick (+`content-reload`),
+  `sfx` = sfx-trigger/sfx-set.
+- `fallback`: `builtin` (Loopback over the reference Sim) or `classic`
+  (inline `infra/*`). First live worker wins a domain; failures are
+  reported in `supervisor.notes` and shown as the opening banner.

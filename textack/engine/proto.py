@@ -25,8 +25,8 @@ U64_MAX = 2 ** 64 - 1
 # type -> (required {field: kind}, optional {field: kind})
 # kinds: str | int | seed | num | bool | dict | list | any
 SPEC = {
-    "hello": ({"role": "str", "proto": "list"}, {}),
-    "ready": ({"role": "str", "proto": "num"}, {}),
+    "hello": ({"role": "str", "proto": "list"}, {"id": "any"}),
+    "ready": ({"role": "str", "proto": "num"}, {"id": "any"}),
     "ping": ({}, {"id": "any"}),
     "pong": ({}, {"id": "any"}),
     "hit": ({"id": "any", "target": "str", "buf": "str", "elapsed": "num",

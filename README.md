@@ -113,6 +113,21 @@ TEXTACK_SFX=off textack      # start muted
 - Sound: `sfx/*.wav` via paplay/aplay/mpv (beep fallback, F3 on/off).
 - `:q` to quit. `F2` cycles quality, `F3` toggles sound.
 
+## Engine modes
+
+Classic (default) is pure Python — zero toolchains. The polyglot fleet
+(Rust sim, Lua content, Python sfx over one wire protocol) gives
+identical answers through separate processes:
+
+```bash
+textack --engine=polyglot   # or: TEXTACK_ENGINE=polyglot textack
+```
+
+Missing binaries degrade per-domain to builtin/classic with a note in
+the opening banner — the game always runs. `F5` hot-reloads content
+live in polyglot mode. Fleet layout in `engine.json`, contract in
+`docs/PROTOCOL.md`. Toolchains for the full fleet: `cargo`, `lua5.4`.
+
 ## Performance
 
 - Single `getmaxyx()` per frame, passed down to every widget

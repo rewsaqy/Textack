@@ -23,6 +23,8 @@ def call(t, mid=1, **kw):
 def test_handshake():
     assert call("hello", role="director", proto=[1], mid=None) == {
         "v": 1, "t": "ready", "role": "sim", "proto": 1}
+    assert call("hello", role="director", proto=[1], mid=8) == {
+        "v": 1, "t": "ready", "role": "sim", "proto": 1, "id": 8}
     assert call("ping", mid=4) == {"v": 1, "t": "pong", "id": 4}
     assert SIM.handle({"v": 1, "t": "ping"}) == {"v": 1, "t": "pong"}
     assert call("bye") == {"v": 1, "t": "bye"}

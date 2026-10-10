@@ -34,11 +34,14 @@ class Sim:
             return proto.err("bad-message", str(e), msg.get("id"))
 
     def _on_hello(self, msg):
-        return {"v": 1, "t": "ready", "role": self.role, "proto": 1}
+        rep = {"v": 1, "t": "ready", "role": self.role, "proto": 1}
+        if msg.get("id") is not None:
+            rep["id"] = msg["id"]
+        return rep
 
     def _on_ping(self, msg):
         rep = {"v": 1, "t": "pong"}
-        if "id" in msg:
+        if msg.get("id") is not None:
             rep["id"] = msg["id"]
         return rep
 

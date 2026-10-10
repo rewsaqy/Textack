@@ -26,9 +26,9 @@ middle, side effects at the edge.
 
 - `core` imports stdlib only (`random`, `dataclasses`, `typing`).
   No curses, no files, no sound. Fully unit-testable.
-- `engine` (polyglot v2, phase 1: protocol + reference only, game still
-  runs classic) imports `core` + stdlib only. Speaks `docs/PROTOCOL.md`.
-  Never imports `ui`/`infra`.
+- `engine` (polyglot v2) imports `core` + stdlib only, plus `infra/sfx`
+  for the classic fallback. Speaks `docs/PROTOCOL.md`. `ui` may import
+  `engine` (siege routes through the director); nothing else imports it.
 - `ui` may import `core` and `infra`. Owns all `curses` calls.
 - `infra` may import `core` (types/constants only).
 - Nothing imports `ui/screens/*` except the entry shim
@@ -54,6 +54,11 @@ another screen's internals) fail review even if tests pass.
 | `rs/textack-sim/` | engine (rust) | sim worker port | stdio binary, bit-identical replies (see its README) |
 | `lua/worker.lua` + `lua/json.lua` + `lua/mt.lua` | engine (lua) | content worker | stdio, lua5.4 + luajit (see lua/README) |
 | `content/*.lua` | engine data | waves/dialog/words | portable canonical copy, hot-reloadable |
+| `engine.json` | engine fleet | worker declarations | cmds, alts, domains, fallbacks |
+| `textack/engine/mode.py` | engine | `--engine` selection | `active()` → classic/polyglot |
+| `textack/engine/pipe_client.py` | engine | generic stdio client | `PipeClient` (spawn, notify, id-matched requests) |
+| `textack/engine/supervisor.py` | engine | fleet boot | per-domain fallbacks, `director()` |
+| `textack/engine/director.py` | engine | routing facade | core-mirroring methods, fail-open downgrade |
 | `textack/ui/palette.py` | ui | color pairs | `init()` |
 | `textack/ui/widgets.py` | ui | bars, panels, input | `hp_bar_str(...)`, `safe_add(...)` |
 | `textack/ui/fx.py` | ui | transitions | `fade_out(...)`, `fade_in_blank(...)` |

@@ -1,10 +1,10 @@
 # textack/ui/screens/siege.py
 """Siege loop: typing = damage.
 
-Render/particle/star/shake code; math delegated to core:
-enemies.for_wave, words.pick_word, combat.resolve_hit/combo_step,
-progression.rank_for/gain_xp/next_threshold, upgrades.fresh_stats/
-/roll_choices/apply, quality.effective_interval, infra.storage/sfx/waifu.
+Render/particle/star/shake code; math delegated per call site: classic
+core/* by default, or the polyglot EngineDirector under
+--engine=polyglot (identical answers, see textack/engine/director.py).
+Trivial pure helpers and CLI/env lookups stay on core/* directly.
 """
 import curses
 import math
@@ -15,6 +15,7 @@ import time
 
 from textack import VERSION
 from textack.core import combat, enemies, progression, story, upgrades, words
+from textack.engine import mode as engine_mode
 from textack.infra import quality, storage, waifu
 from textack.infra import sfx as sfx_mod
 from textack.ui import face as face_mod
@@ -73,12 +74,69 @@ def show(stdscr, P):
     ema_dt = 1.0 / quality.QLEVELS[qi]["fps"]
     qcheck_t = 0.0
     fps_show = float(quality.QLEVELS[qi]["fps"])
+    # engine routing: polyglot fleet or classic core (identical answers).
+    # The fleet boots workers once; every exit path below closes them.
+    _sup = None
+    D = None
+    _boot_msg = None
+    _boot_msg_t = 3.0
+    if engine_mode.active(sys.argv[1:], os.environ) == engine_mode.POLYGLOT:
+        try:
+            from textack.engine import supervisor as _sup_mod
+            _sup = _sup_mod.Supervisor.from_repo()
+            D = _sup.director()
+            _boot_msg = _sup.summary() + " (F5 reloads content)"
+            _boot_msg_t = 4.0
+        except Exception as e:  # noqa: BLE001
+            D = None
+            _sup = None
+            _boot_msg = f"Engine boot failed ({e}) — classic mode"
+    if D is not None:
+        r_hit = D.resolve_hit
+        r_combo = D.combo_step
+        r_counter = D.miss_damage
+        r_xp = D.gain_xp
+        r_next = D.next_threshold
+        r_rank = D.rank_for
+        r_wave = D.for_wave
+        r_pick = D.pick_word
+        r_apply = D.apply
+        r_roll = D.roll_choices
+        r_line = D.line_for
+        r_mood = D.mood_line
+        r_unlocks = D.check_unlocks
+    else:
+        r_hit = combat.resolve_hit
+        r_combo = combat.combo_step
+        r_counter = combat.miss_damage
+        r_xp = progression.gain_xp
+        r_next = progression.next_threshold
+        r_rank = progression.rank_for
+        r_wave = enemies.for_wave
+        r_pick = words.pick_word
+        r_apply = upgrades.apply
+        r_roll = upgrades.roll_choices
+        r_line = story.line_for
+        r_mood = story.mood_line
+        r_unlocks = story.check_unlocks
 
+    def _close_sup():
+        if _sup is not None:
+            try:
+                _sup.close()
+            except Exception:  # noqa: BLE001, S110
+                pass
+
+    def sfx_play(name):
+        if D is not None:
+            D.sfx_trigger(name)
+        else:
+            sfx_mod.play(stdscr, sfx, name)
     wave = 1
     stats = upgrades.fresh_stats()
     owned = {}
     base_lv = 0
-    ecfg = enemies.for_wave(1)
+    ecfg = r_wave(1)
     enemy_max = float(ecfg.hp)
     player_max = float(stats["max_hp"])
     enemy_hp = float(enemy_max)
@@ -86,7 +144,7 @@ def show(stdscr, P):
     disp_e = float(enemy_max)
     disp_p = float(player_max)
 
-    target = words.pick_word(wave)
+    target = r_pick(wave)
     buf = ""
     word_start = time.monotonic()
     combo = 0
@@ -173,8 +231,8 @@ def show(stdscr, P):
     shake_t = 0.0
     shake_mag = 0
     enemy_timer = 0.0
-    msg = "Type + Enter to shoot! :q quits (F2 quality • F3 sound)"
-    msg_t = 3.0
+    msg = _boot_msg or "Type + Enter to shoot! :q quits (F2 quality • F3 sound)"
+    msg_t = _boot_msg_t
     flash = 0.0
     # camera + impact feel (Atari juice): hit-stop freezes the world for a
     # few frames on impact, kick_y punches the whole scene up/down.
@@ -200,11 +258,11 @@ def show(stdscr, P):
 
     def new_wave(w):
         nonlocal enemy_max, enemy_hp, disp_e, target, buf, word_start, enemy_timer, ecfg, banner, banner_t, cur_interval, grace_t
-        ecfg = enemies.for_wave(w)
+        ecfg = r_wave(w)
         enemy_max = float(ecfg.hp)
         enemy_hp = float(enemy_max)
         disp_e = float(enemy_max)
-        target = words.pick_word(w)
+        target = r_pick(w)
         buf = ""
         word_start = time.monotonic()
         enemy_timer = 0.0
@@ -213,7 +271,7 @@ def show(stdscr, P):
         banner_t = 1.6
         grace_t = 1.2  # cinematic breather: enemy holds fire, banner shows
         trig = "boss" if w % 5 == 0 else "wave"
-        set_story(story.line_for(waifu_id, trig, {"wave": w, "enemy": ecfg.name}, random.randrange(999)), 4.0)
+        set_story(r_line(waifu_id, trig, {"wave": w, "enemy": ecfg.name}, random.randrange(999)), 4.0)
 
     def add_particle(p):
         if len(particles) >= MAXP:
@@ -268,6 +326,7 @@ def show(stdscr, P):
         if guard.too_small(h, w):
             if guard.wait_until_fit(stdscr, P) == "quit":
                 save_waifu_state()
+                _close_sup()
                 return
             stdscr.nodelay(True)
             stdscr.timeout(frame_ms)
@@ -292,6 +351,7 @@ def show(stdscr, P):
         while key != -1:
             if key == 27:
                 save_waifu_state()
+                _close_sup()
                 return
             elif key == curses.KEY_F2:
                 # F2 = cycle quality manually (F-keys are > 255, never clash)
@@ -300,19 +360,32 @@ def show(stdscr, P):
                 msg_t = 2.0
             elif key == curses.KEY_F3:
                 sfx["on"] = not sfx["on"]
+                if D is not None:
+                    D.sfx_set(sfx["on"])
                 msg = f"Sound: {'ON' if sfx['on'] else 'OFF'} (F3 changes)"
                 msg_t = 2.0
+            elif key == curses.KEY_F5:
+                if D is not None:
+                    ver, errs = D.content_reload()
+                    if errs:
+                        msg = f"Reload kept v{ver}: {str(errs[0])[:44]}"
+                    else:
+                        msg = f"Content v{ver} reloaded live"
+                else:
+                    msg = "Classic engine: no content worker (try --engine=polyglot)"
+                msg_t = 2.5
             elif key in (curses.KEY_BACKSPACE, 127, 8):
                 buf = buf[:-1]
             elif key in (curses.KEY_ENTER, 10, 13):
                 elapsed = max(0.05, now - word_start)
                 if buf.strip() == ":q":
                     save_waifu_state()
+                    _close_sup()
                     return
                 shots += 1
                 time_total += elapsed
                 if buf == target:
-                    r = combat.resolve_hit(target, buf, elapsed, combo, stats, wave)
+                    r = r_hit(target, buf, elapsed, combo, stats, wave)
                     combo += 1
                     best_combo = max(best_combo, combo)
                     dmg, tag, wpm = r.dmg, r.tag, r.wpm
@@ -335,7 +408,7 @@ def show(stdscr, P):
                     recoil_t = 0.12  # base kicks back one row for a few frames
                     hitstop = max(hitstop, 0.045)  # impact freeze
                     kick_y = max(-3.0, kick_y - 1.0)  # camera punches upward
-                    sfx_mod.play(stdscr, sfx, "shoot")
+                    sfx_play("shoot")
                     if combo % 5 == 0:
                         floaters.append({"x": cx - 5, "y": 11.0, "text": f"COMBO x{combo}!",
                                          "life": 1.2, "max": 1.2, "attr": P["yellow"]})
@@ -348,19 +421,19 @@ def show(stdscr, P):
                     if perfect and stats["repair"] > 0:
                         player_hp = min(stats["max_hp"], player_hp + stats["repair"])
                     # XP Survivor-style
-                    xp += progression.gain_xp(len(target), wave, stats["xp_mult"], wave % 5 == 0)
+                    xp += r_xp(len(target), wave, stats["xp_mult"], wave % 5 == 0)
                     avg = (correct_chars_total / 5) / (time_total / 60) if time_total > 0 else 0
                     maybe_save_best(wave, avg)
                 else:
                     # combo guard: chance the combo survives
-                    kept = combat.combo_step(False, combo, stats["combo_guard"])
+                    kept = r_combo(False, combo, stats["combo_guard"])
                     if combo > 0 and kept == combo:
                         msg = f"Close! combo x{combo} saved (GUARD)"
                         combo = kept  # hold
                     else:
                         combo = 0
                         msg = f"Miss! '{buf}' != '{target}' — combo reset!"
-                    counter = combat.miss_damage(ecfg.dmg, wave, random.randint(0, 4))
+                    counter = r_counter(ecfg.dmg, wave, random.randint(0, 4))
                     projectiles.append({"x": cx + random.randint(-6, 6), "y": 8.0, "vy": 26.0,
                                         "char": ecfg.proj, "attr": P[ecfg.col],
                                         "pending": float(counter), "side": "enemy",
@@ -368,10 +441,10 @@ def show(stdscr, P):
                     msg_t = 1.6
                     shake_t = 0.35
                     shake_mag = 2
-                    sfx_mod.play(stdscr, sfx, "miss")
+                    sfx_play("miss")
                     set_mood("sad", 1.4)
                     bond = max(0.0, bond + story.BOND_GAIN["miss"])
-                target = words.pick_word(wave)
+                target = r_pick(wave)
                 buf = ""
                 word_start = now
             elif 32 <= key <= 126 and len(buf) < 60:
@@ -407,7 +480,7 @@ def show(stdscr, P):
                                     "char": "⌖", "attr": P["magenta"],
                                     "pending": float(tdmg), "side": "player",
                                     "label": f"turret -{int(tdmg)}"})
-                sfx_mod.play(stdscr, sfx, "turret")
+                sfx_play("turret")
 
         if msg_t > 0:
             msg_t -= dt
@@ -458,14 +531,14 @@ def show(stdscr, P):
                 shake_t = 0.18
                 shake_mag = 1
                 flash = 0.07
-                sfx_mod.play(stdscr, sfx, "hit")
+                sfx_play("hit")
             else:
                 # shield: full-block chance
                 if random.random() < stats["shield"]:
                     spawn_explosion(p["x"], h - 8, P["cyan"], n=10)
                     floaters.append({"x": p["x"] + 1, "y": h - 10.0, "text": "BLOCK",
                                      "life": 1.0, "max": 1.0, "attr": P["cyan"]})
-                    sfx_mod.play(stdscr, sfx, "block")
+                    sfx_play("block")
                     set_mood("happy", 1.0)
                 else:
                     player_hp -= p["pending"]
@@ -476,7 +549,7 @@ def show(stdscr, P):
                     shake_mag = 2
                     hitstop = max(hitstop, 0.06)
                     kick_y = min(3.0, kick_y + 2.0)  # camera slammed downward
-                    sfx_mod.play(stdscr, sfx, "hurt")
+                    sfx_play("hurt")
                     set_mood("hurt", 1.2)
 
         for pt in particles:
@@ -502,11 +575,11 @@ def show(stdscr, P):
         while xp >= xp_next:
             xp -= xp_next
             level += 1
-            xp_next = progression.next_threshold(xp_next)
+            xp_next = r_next(xp_next)
             pending_lv += 1
         while pending_lv > 0:
             pending_lv -= 1
-            choices = upgrades.roll_choices(owned, k=3)
+            choices = r_roll(owned, k=3)
             if not choices:
                 break
             # fresh explosion before picking
@@ -517,10 +590,10 @@ def show(stdscr, P):
             stdscr.refresh()
             pick = upgrade_screen.show(stdscr, P, choices, level, owned)
             u = choices[pick]
-            upgrades.apply(get_field(u, "id"), stats)
+            r_apply(get_field(u, "id"), stats)
             owned[get_field(u, "id")] = owned.get(get_field(u, "id"), 0) + 1
             base_lv += 1
-            sfx_mod.play(stdscr, sfx, "select")
+            sfx_play("select")
             set_mood("excited", 2.2)
             if get_field(u, "id") == "wall":
                 player_hp = min(stats["max_hp"], player_hp + 25)
@@ -542,10 +615,10 @@ def show(stdscr, P):
             spawn_explosion(cx, 8, P["yellow"], n=40)
             spawn_ring(cx, 8, P["yellow"], n=26, speed=30)
             hitstop = max(hitstop, 0.14)  # kill freeze, then celebration
-            sfx_mod.play(stdscr, sfx, "waveclear")
+            sfx_play("waveclear")
             set_mood("excited", 2.5)
             bond = max(0.0, bond + story.BOND_GAIN["clear"])
-            newly = story.check_unlocks(wstate.get("unlocked", ["aika"]), wave + 1)
+            newly = r_unlocks(wstate.get("unlocked", ["aika"]), wave + 1)
             if newly:
                 for _uid in newly:
                     wstate["unlocked"] = [*wstate.get("unlocked", ["aika"]), _uid]
@@ -558,7 +631,7 @@ def show(stdscr, P):
                         pass
                     set_story(raw, 5.0)
             else:
-                set_story(story.line_for(waifu_id, "clear", {"wave": wave, "enemy": ecfg.name}, random.randrange(999)), 3.0)
+                set_story(r_line(waifu_id, "clear", {"wave": wave, "enemy": ecfg.name}, random.randrange(999)), 3.0)
             save_waifu_state()
             t0 = time.monotonic()
             while time.monotonic() - t0 < 1.8:
@@ -593,7 +666,7 @@ def show(stdscr, P):
             player_hp = float(player_max)
             disp_p = float(player_max)
             new_wave(wave)
-            msg = f"WAVE {wave} {ecfg.name} — {progression.rank_for(avg_wpm, best_combo)} mode ON!"
+            msg = f"WAVE {wave} {ecfg.name} — {r_rank(avg_wpm, best_combo)} mode ON!"
             msg_t = 2.5
             best_combo = 0
             last = time.monotonic()
@@ -605,10 +678,10 @@ def show(stdscr, P):
             acc = (hits / shots * 100) if shots else 100
             avg_wpm = (correct_chars_total / 5) / (time_total / 60) if time_total > 0 else 0
             maybe_save_best(wave, avg_wpm)
-            rk = progression.rank_for(avg_wpm, best_combo)
-            sfx_mod.play(stdscr, sfx, "gameover")
+            rk = r_rank(avg_wpm, best_combo)
+            sfx_play("gameover")
             save_waifu_state()
-            defeat_say = story.line_for(waifu_id, "defeat", {"wave": wave, "enemy": ecfg.name}, random.randrange(999))
+            defeat_say = r_line(waifu_id, "defeat", {"wave": wave, "enemy": ecfg.name}, random.randrange(999))
             _gw = 56
             _gx = cx - _gw // 2
             _gy = h // 2 - 3
@@ -629,11 +702,13 @@ def show(stdscr, P):
                 # q / esc / anything but enter = simple confirm: q quits
                 try:
                     if chr(k).lower() == "q":
+                        _close_sup()
                         return
                 except Exception:  # noqa: BLE001, S110
                     pass
                 # Enter / space = retry
                 if k not in (10, 13, ord(" ")):
+                    _close_sup()
                     return
             wave = 1
             stats = upgrades.fresh_stats()
@@ -707,7 +782,7 @@ def show(stdscr, P):
         # rank is pure but string-heavy; refresh at most 2x/sec or on combo change
         avg_q = round(avg_live)
         if combo != rk_combo or avg_q != rk_avg_q or now - rk_t > 0.5:
-            rk_live = progression.rank_for(avg_live, combo)
+            rk_live = r_rank(avg_live, combo)
             rk_combo, rk_avg_q, rk_t = combo, avg_q, now
         # ── TOP ZONE: enemy (clearly separated from player status) ──
         widgets.safe_add(stdscr, 0, 2, f"TEXTACK v{VERSION}  W{wave} COMBO x{combo} {rk_live}", P["fg"], size)
@@ -892,10 +967,10 @@ def show(stdscr, P):
                 seed = int(now / 4)
                 if seed != idle_seed_cache:
                     idle_seed_cache = seed
-                    idle_line_cache = story.line_for(waifu_id, "idle", seed=seed)
+                    idle_line_cache = r_line(waifu_id, "idle", seed=seed)
                 say = idle_line_cache
             else:
-                say = story.mood_line(waifu_id, wmood, wline)
+                say = r_mood(waifu_id, wmood, wline)
             widgets.safe_add(stdscr, h - 4, px, f"「{say}」", P["dim"], size)
         # cheap heartbeat: screen corners blink under 30% HP (4 addstrs)
         if player_hp < player_max * 0.3 and player_hp > 0:

@@ -150,7 +150,10 @@ end
 local handlers = {}
 
 handlers.hello = function(m)
-  return { v = 1, t = "ready", role = "content-lua", proto = 1 }
+  local r = { v = 1, t = "ready", role = "content-lua", proto = 1 }
+  local id = echo_id(m)
+  if id ~= nil then r.id = id end
+  return r
 end
 
 handlers.ping = function(m)

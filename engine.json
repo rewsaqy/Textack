@@ -1,0 +1,26 @@
+{
+  "_comment": "Polyglot fleet (phase 5). Unknown fields ignored. A component whose binary is missing falls back per-domain (builtin Loopback or classic inline) — the game always runs.",
+  "version": 1,
+  "components": [
+    {
+      "name": "sim-rs",
+      "cmd": ["rs/textack-sim/target/debug/textack-sim"],
+      "alts": [["rs/textack-sim/target/release/textack-sim"]],
+      "domains": ["sim"],
+      "fallback": "builtin"
+    },
+    {
+      "name": "content-lua",
+      "cmd": ["lua5.4", "lua/worker.lua"],
+      "alts": [["luajit", "lua/worker.lua"], ["lua", "lua/worker.lua"]],
+      "domains": ["content"],
+      "fallback": "builtin"
+    },
+    {
+      "name": "sfx-py",
+      "cmd": ["{python}", "-m", "textack.engine.sfx_worker"],
+      "domains": ["sfx"],
+      "fallback": "classic"
+    }
+  ]
+}
