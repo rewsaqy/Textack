@@ -5,7 +5,9 @@ Every future worker (Rust, Lua, C, ...) must satisfy these same vectors —
 they are the executable half of docs/PROTOCOL.md. Seeded requests are
 byte-deterministic; unseeded random ones only assert shape.
 """
-from textack.core import combat, enemies, story, upgrades
+import random
+
+from textack.core import combat, enemies, story, upgrades, words
 from textack.engine import proto
 from textack.engine.sim import Sim
 from textack.engine.transport import Loopback
@@ -90,6 +92,15 @@ def test_upgrade_and_roll():
     assert call("unlocks", unlocked=["aika"], wave=1)["ids"] == []
 
 
+def test_pick_seeded_matches_core():
+    for wave in [1, 2, 3, 9]:
+        for seed in [0, 7, 99]:
+            rep = call("pick", wave=wave, seed=seed)
+            assert rep["text"] == words.pick_word(wave, random.Random(seed))
+    rep = call("pick", wave=1)
+    assert rep["text"] in words.TIER1
+
+
 def test_wire_errors_never_raise():
     e1 = LB.call({"v": 1, "t": "hit", "id": 5})
     assert e1["t"] == "error" and e1["code"] == "bad-message" and e1["id"] == 5
@@ -105,6 +116,12 @@ def test_replies_validate_against_spec():
     for rep in [call("hello", role="d", proto=[1], mid=None),
                 call("hit", target="ls", buf="ls", elapsed=0.4, combo=0,
                      stats=upgrades.fresh_stats(), wave=1, seed=1),
-                call("roll", owned={"ammo": 8}, seed=3)]:
+                call("roll", owned={"ammo": 8}, seed=3),
+                call("pick", wave=3, seed=11)]:
         ok, code = proto.validate(rep)
         assert (ok, code) == (True, ""), (rep, code)
+
+
+def test_sim_rejects_content_management():
+    e = call("content-reload", mid=9)
+    assert e["t"] == "error" and e["code"] == "unknown-type"

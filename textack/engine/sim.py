@@ -9,7 +9,7 @@ violations and unknown types become {"t": "error", ...} replies.
 """
 import random
 
-from textack.core import combat, enemies, progression, story, upgrades
+from textack.core import combat, enemies, progression, story, upgrades, words
 from textack.engine import proto
 
 
@@ -114,3 +114,8 @@ class Sim:
     def _on_unlocks(self, msg):
         ids = story.check_unlocks(list(msg["unlocked"]), msg["wave"])
         return {"v": 1, "t": "unlocks-is", "id": msg["id"], "ids": ids}
+
+    def _on_pick(self, msg):
+        rng = random.Random(msg["seed"]) if "seed" in msg else random
+        text = words.pick_word(msg["wave"], rng)
+        return {"v": 1, "t": "word", "id": msg["id"], "text": text}

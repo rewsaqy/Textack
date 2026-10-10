@@ -52,6 +52,8 @@ another screen's internals) fail review even if tests pass.
 | `textack/engine/sfx_worker.py` | engine | live sound worker | `SfxWorker` + `python -m` stdio entry |
 | `textack/engine/sfx_client.py` | engine | director side | `SfxClient` (spawn, notify, id-matched requests) |
 | `rs/textack-sim/` | engine (rust) | sim worker port | stdio binary, bit-identical replies (see its README) |
+| `lua/worker.lua` + `lua/json.lua` + `lua/mt.lua` | engine (lua) | content worker | stdio, lua5.4 + luajit (see lua/README) |
+| `content/*.lua` | engine data | waves/dialog/words | portable canonical copy, hot-reloadable |
 | `textack/ui/palette.py` | ui | color pairs | `init()` |
 | `textack/ui/widgets.py` | ui | bars, panels, input | `hp_bar_str(...)`, `safe_add(...)` |
 | `textack/ui/fx.py` | ui | transitions | `fade_out(...)`, `fade_in_blank(...)` |

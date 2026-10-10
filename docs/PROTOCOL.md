@@ -80,8 +80,21 @@ Request → reply. `id` required on every request below except
 | `mood` | `wid`, `mood`, `seed?` | `line` (`text`) | Mirrors `story.mood_line` |
 | `upgrade` | `uid`, `stats{}` | `stats` (`stats{}`) | Pure: input stats never mutated on the wire; reply carries the copy |
 | `roll` | `owned{}`, `k?` (=3), `seed?` | `choices` (`ids[]`) | Mirrors `roll_choices` |
+| `pick` | `wave`, `seed?` | `word` (`text`) | Mirrors `words.pick_word` (content-owned) |
 | `unlocks` | `unlocked[]`, `wave` | `unlocks-is` (`ids[]`) | Mirrors `check_unlocks` |
 | `bye` | — | `bye` | Clean shutdown |
+
+## Catalog (v1, content domain — added phase 4, purely additive)
+
+Owned by the Lua worker (`lua/worker.lua`, data in `content/`). Same
+`dialog`/`mood`/`wave`/`unlocks`/`pick` shapes as the sim domain — a
+content worker answers the data-owned subset; anything else is
+`unknown-type` (it must NOT implement sim math).
+
+| Request | Key fields | Reply | Notes |
+|---|---|---|---|
+| `content-reload` | `path?`, `id?` | `content-state` (`version`, `errors[]`) | Hot-reload: broken files keep the old version serving, errors reported as data |
+| (`dialog`, `mood`, `wave`, `unlocks`, `pick`) | as sim domain | as sim domain | Data-driven from `content/` |
 
 ## Catalog (v1, sfx domain — added phase 2, purely additive)
 
@@ -97,10 +110,11 @@ errors. `backend` names the emission path (`paplay`, `mpv`, `powershell`,
 
 ## Determinism
 
-Any request carrying `seed` must be **byte-deterministic**: same bytes
-in → same bytes out, in every language, forever. Seeded vectors are
-the conformance gate. Unseeded requests (live `rng`) assert shape
-only, never exact values.
+Any request carrying `seed` must be **reproducible**: same bytes in →
+semantically equal replies in every language, forever (parsed structures
+are compared, not raw bytes — key order may vary by encoder). Seeded
+vectors are the conformance gate. Unseeded requests (live `rng`) assert
+shape only, never exact values.
 
 Seeded randomness replicates CPython's `random` bit-exact
 (`rs/textack-sim/src/mt.rs` is the executable spec):
@@ -119,7 +133,16 @@ Seeded randomness replicates CPython's `random` bit-exact
 Floats must also match bit-exactly: keep the operation order of
 `core/*` (mixed int/float expressions evaluate left to right, `int()`
 truncates toward zero), and emit floats in shortest-roundtrip form
-(Python `repr`, Rust `serde_json`, Lua `%.17g` — all agree).
+(Python `repr`, Rust `serde_json`; Lua climbs a precision ladder, see
+below — all agree over the game domain, proven live by the batteries).
+
+Lua (`lua/mt.lua`, `lua/json.lua`) reimplements both in pure arithmetic
+so the same code runs on 5.4 and LuaJIT: 32-bit ops via 16-bit halves
+(doubles hold every intermediate value exactly), MT state as
+integral floats, float emission by shortest-roundtrip ladder in Python
+notation. Known Lua limits (documented, tested): integers must satisfy
+`|v| < 2^53` and seeds `< 2^53` — beyond that the worker answers
+`bad-message`; Python/Rust accept the full i64/u64 range.
 
 ## Conformance (how to add a language)
 
@@ -144,5 +167,9 @@ overloading v1 fields.
 3. ✅ **Phase 3**: Rust sim (`rs/textack-sim`) — full sim domain port,
    MT19937 bit-exact vs CPython, proven by `cargo test` + the live
    battery in `tests/test_rust_sim.py` (~1000 seeded replies equal).
+4. ✅ **Phase 4**: Lua content (`lua/worker.lua`, data in `content/`) —
+   dialog/waves/words/pick + hot-reload via `content-reload`, proven on
+   lua5.4 AND luajit by `tests/test_lua_content.py` (waves 1..30 float-
+   exact, every dialog line, reload session with broken files).
 4. Content scripts (Lua) + hot-reload.
 5. Supervisor + `engine.yaml` + `--engine=polyglot` flag.
